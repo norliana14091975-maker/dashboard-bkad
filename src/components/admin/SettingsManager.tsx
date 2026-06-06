@@ -71,6 +71,7 @@ interface PengaturanData {
   loaderDisplayTime: number;
   loaderImageBase64: string | null;
   autoRefreshInterval: number;
+  versiAplikasi: string;
   copilotConfig: CopilotConfig | null;
 }
 
@@ -97,6 +98,7 @@ const DEFAULT_SETTINGS: Omit<PengaturanData, "id"> = {
   loaderDisplayTime: 5000,
   loaderImageBase64: null,
   autoRefreshInterval: 0,
+  versiAplikasi: "1.0.0",
   copilotConfig: null,
 };
 
@@ -307,6 +309,7 @@ export default function SettingsManager() {
         loaderDisplayTime: data.loaderDisplayTime ?? 5000,
         loaderImageBase64: data.loaderImageBase64 ?? null,
         autoRefreshInterval: data.autoRefreshInterval ?? 0,
+        versiAplikasi: data.versiAplikasi || "1.0.0",
         copilotConfig: data.copilotConfig
           ? (typeof data.copilotConfig === "string"
             ? (() => {
@@ -1405,6 +1408,42 @@ export default function SettingsManager() {
               Indikator countdown dan tombol refresh manual akan muncul di header dashboard. 
               Rekomendasi: <strong>30 menit</strong> untuk keseimbangan antara data terbaru dan performa server.
             </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 6.7: Versi Aplikasi */}
+      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaDark }}>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Info className="w-5 h-5" style={{ color: currentPengaturan.warnaDark }} />
+            Versi Aplikasi
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Atur nomor versi aplikasi yang ditampilkan di footer dan halaman publik.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="versiAplikasi">Nomor Versi</Label>
+              <Input
+                id="versiAplikasi"
+                value={form.versiAplikasi}
+                onChange={(e) => handleFieldChange("versiAplikasi", e.target.value)}
+                placeholder="1.0.0"
+              />
+              <p className="text-xs text-muted-foreground">Format yang direkomendasikan: Major.Minor.Patch (contoh: 2.1.0)</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Pratinjau</Label>
+              <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Versi</span>
+                <span className="font-mono font-semibold" style={{ color: currentPengaturan.warnaPrimary }}>
+                  v{form.versiAplikasi || "1.0.0"}
+                </span>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

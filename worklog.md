@@ -636,4 +636,125 @@ Stage Summary:
 - Two loader styles available: Classic (BudgetLoader) and Modern (SplashLoader)
 - Settings UI has visual selector with previews
 - Modern loader has proper fade-out animation when loading completes
-- API supports saving/loading loaderType setting
+- API supports saving/loaderType setting
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Add versiAplikasi field support to PengaturanContext and admin pengaturan API route
+
+Work Log:
+- Read worklog.md and both target files
+- Updated `PengaturanContext.tsx`:
+  - Added `versiAplikasi: string` to `PengaturanData` type (after `autoRefreshInterval`)
+  - Added `versiAplikasi: "1.0.0"` to `DEFAULT_PENGATURAN` object
+  - Added `versiAplikasi: raw.versiAplikasi || "1.0.0"` in `setPengaturan` call inside `fetchSettings` (after `autoRefreshInterval` line)
+- Updated `src/app/api/admin/pengaturan/route.ts`:
+  - Added `'versiAplikasi'` to `stringFields` array (after `'loaderImageBase64'`)
+  - Since versiAplikasi is a string field, it is handled by existing string field validation logic (must be string or null)
+- Verified all edits by reading back modified sections
+- Lint check passed with no errors
+
+Stage Summary:
+- `versiAplikasi` field added end-to-end: type definition, default value, fetch mapping, and API validation
+- Default value is "1.0.0"
+- API route validates it as a string field (string or null)
+- No database schema change needed (will be handled separately if Prisma model update is required)
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: Create visitor tracking API routes (track + stats)
+
+Work Log:
+- Read worklog.md to understand project history and conventions
+- Verified Prisma schema already has `Pengunjung` model with sessionId, ipAddress, userAgent, halaman, lastActive, createdAt fields
+- Created `/src/app/api/pengunjung/track/route.ts`:
+  - POST handler: accepts `{ sessionId, halaman? }`, extracts IP from x-forwarded-for/x-real-ip headers, extracts user-agent
+  - Upserts Pengunjung by sessionId: updates lastActive, halaman, ipAddress, userAgent on existing; creates new record otherwise
+  - Cleans up stale sessions (lastActive > 5 min ago) after upsert
+  - Returns `{ success: true, stats: { online, today, total } }` where online = lastActive > 2 min, today = createdAt >= start of day Asia/Jakarta, total = all records
+  - GET handler: returns stats-only `{ online, today, total }` without tracking
+  - Added `getTodayJakarta()` helper for Asia/Jakarta timezone date calculation
+  - Error handling with proper status codes (400 for bad input, 500 for server errors)
+- Created `/src/app/api/pengunjung/stats/route.ts`:
+  - GET handler: cleans up stale sessions (lastActive > 5 min ago) first, then computes stats
+  - Returns `{ online, today, thisWeek, thisMonth, total }` with parallel Promise.all queries
+  - online = lastActive > 2 min ago, today = createdAt >= Jakarta start of day, thisWeek = last 7 days, thisMonth = last 30 days, total = all
+  - Error handling with 500 status code
+- Lint check passed with no errors
+- Dev server running without compilation errors
+
+Stage Summary:
+- Two visitor tracking API routes created:
+  1. `/api/pengunjung/track` — POST (upsert+cleanup+stats) and GET (stats-only)
+  2. `/api/pengunjung/stats` — GET (extended stats with thisWeek/thisMonth + cleanup)
+- Both routes use `db` from `@/lib/db` (Prisma Client)
+- Stale session cleanup: deletes records where lastActive > 5 minutes ago
+- Online detection: records where lastActive > 2 minutes ago
+- Today detection: Asia/Jakarta timezone start-of-day calculation
+- Proper error handling and status codes throughout
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: Add real-time visitor counter (realcount/realtime) and configurable application version
+
+Work Log:
+- Added `versiAplikasi String @default("1.0.0")` to PengaturanAplikasi model in Prisma schema
+- Added `Pengunjung` model to Prisma schema for visitor tracking (sessionId, ipAddress, userAgent, halaman, lastActive, createdAt) with @@unique([sessionId])
+- Ran `bun run db:push` to sync database
+- Created API routes:
+  - `/api/pengunjung/track/route.ts` — POST (upsert by sessionId + heartbeat + cleanup + stats), GET (stats only)
+  - `/api/pengunjung/stats/route.ts` — GET (extended stats: online, today, thisWeek, thisMonth, total)
+- Updated `PengaturanContext.tsx`:
+  - Added `versiAplikasi: string` to PengaturanData type
+  - Added `versiAplikasi: "1.0.0"` to DEFAULT_PENGATURAN
+  - Added `versiAplikasi: raw.versiAplikasi || "1.0.0"` in fetchSettings
+- Updated `src/app/api/admin/pengaturan/route.ts`:
+  - Added 'versiAplikasi' to stringFields array
+- Updated `SettingsManager.tsx`:
+  - Added `versiAplikasi: string` to local PengaturanData interface
+  - Added `versiAplikasi: "1.0.0"` to DEFAULT_SETTINGS
+  - Added `versiAplikasi: data.versiAplikasi || "1.0.0"` in fetchSettings
+  - Added new "Versi Aplikasi" section (Section 6.7) with:
+    - Input field for version number with placeholder "1.0.0"
+    - Live preview showing "v{version}" with themed color
+    - Description text recommending Major.Minor.Patch format
+- Created `src/hooks/use-visitor-tracker.ts`:
+  - Generates persistent sessionId via sessionStorage
+  - Sends heartbeat every 30 seconds to /api/pengunjung/track
+  - Polls /api/pengunjung/stats every 10 seconds for updates
+  - Re-tracks when activeView changes
+  - Returns { stats, isTracking, fetchStats }
+- Updated `src/app/page.tsx`:
+  - Imported useVisitorTracker hook
+  - Added `const { stats: visitorStats } = useVisitorTracker(activeView)` after activeView state
+  - Updated footer to show:
+    - Version badge: "v1.0.0" (or configured version)
+    - Visitor stats: online count (with animated green dot), today count, total count
+  - Passed visitorOnline and visitorToday props to DashboardHeader
+- Updated `src/components/dashboard/DashboardHeader.tsx`:
+  - Added visitorOnline and visitorToday props
+  - Added visitor count badge in header right section with:
+    - Animated green ping dot
+    - Users icon (hidden on mobile)
+    - Online count with "online" label
+  - Added Users icon import from lucide-react
+- Lint check passes with no errors
+- Browser verified: header shows "3 online", footer shows "v1.0.0" and "3 online • 0 hari ini • 3 total"
+
+Stage Summary:
+- Real-time visitor counter implemented with:
+  - Database model (Pengunjung) for persistent tracking
+  - Session-based tracking with unique sessionId constraint
+  - Heartbeat mechanism (30s interval) for "online" detection
+  - Stats polling (10s interval) for real-time updates
+  - Online = active within last 2 minutes, stale cleanup after 5 minutes
+  - Header badge with animated green dot showing online count
+  - Footer showing online/today/total with version number
+- Application version feature:
+  - New versiAplikasi field in PengaturanAplikasi (default: "1.0.0")
+  - Settings UI with input field and live preview
+  - Version displayed in footer as "v{version}"
+  - Configurable via Admin → Pengaturan → Versi Aplikasi

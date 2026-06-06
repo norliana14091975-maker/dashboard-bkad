@@ -1,7 +1,7 @@
 "use client";
 
 import { TahunAnggaranItem, ActiveView } from "./types";
-import { Menu, Calendar, LogOut, User, ChevronDown, Check, RefreshCw, Clock, Settings2 } from "lucide-react";
+import { Menu, Calendar, LogOut, User, ChevronDown, Check, RefreshCw, Clock, Settings2, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -40,6 +40,9 @@ type DashboardHeaderProps = {
   nextRefreshIn?: number;
   onManualRefresh?: () => void;
   isRefreshing?: boolean;
+  // Visitor stats
+  visitorOnline?: number;
+  visitorToday?: number;
 };
 
 const viewLabels: Record<ActiveView, string> = {
@@ -80,6 +83,8 @@ export default function DashboardHeader({
   nextRefreshIn = 0,
   onManualRefresh,
   isRefreshing = false,
+  visitorOnline = 0,
+  visitorToday = 0,
 }: DashboardHeaderProps) {
   const { pengaturan, logoSrc } = usePengaturan();
   const { isAuthenticated, user, logout } = useAuth();
@@ -136,8 +141,19 @@ export default function DashboardHeader({
           </div>
         </div>
 
-        {/* Right: Auto-Refresh + Year Selector + User Menu */}
+        {/* Right: Visitor Count + Auto-Refresh + Year Selector + User Menu */}
         <div className="flex items-center gap-2">
+          {/* ─── Visitor Count Badge ─── */}
+          <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+            </span>
+            <Users className="w-3.5 h-3.5 hidden sm:inline" />
+            <span className="font-semibold">{visitorOnline}</span>
+            <span className="hidden sm:inline text-emerald-200/70">online</span>
+          </div>
+
           {/* ─── Auto-Refresh Indicator ─── */}
           {isAutoRefreshActive && (
             <Popover>

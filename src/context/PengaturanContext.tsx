@@ -65,6 +65,7 @@ export type PengaturanData = {
   loaderDisplayTime: number;
   loaderImageBase64: string | null;
   autoRefreshInterval: number;
+  versiAplikasi: string;
   copilotConfig: CopilotConfig | null;
 };
 
@@ -92,6 +93,7 @@ const DEFAULT_PENGATURAN: PengaturanData = {
   loaderDisplayTime: 5000,
   loaderImageBase64: null,
   autoRefreshInterval: 0,
+  versiAplikasi: "1.0.0",
   copilotConfig: null,
 };
 
@@ -184,6 +186,7 @@ export function PengaturanProvider({ children }: { children: ReactNode }) {
           loaderDisplayTime: raw.loaderDisplayTime ?? 5000,
           loaderImageBase64: raw.loaderImageBase64 ?? null,
           autoRefreshInterval: raw.autoRefreshInterval ?? 0,
+          versiAplikasi: raw.versiAplikasi || "1.0.0",
           copilotConfig: parsedCopilotConfig,
         });
       }

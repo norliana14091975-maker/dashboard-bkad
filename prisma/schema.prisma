@@ -259,9 +259,26 @@ model PengaturanAplikasi {
   loaderDisplayTime    Int     @default(5000) // Minimum display time for budget loader in milliseconds
   loaderImageBase64    String? // Base64 encoded GIF/image for loader center display
   autoRefreshInterval  Int     @default(0) // Auto-refresh interval in minutes (0 = disabled)
+  versiAplikasi      String   @default("1.0.0") // Version string displayed in footer
   copilotConfig      String? // JSON string: AI Copilot configuration. e.g. {"enabled":true,"provider":"z-ai","model":"default","systemPrompt":"...","welcomeMessage":"...","temperature":0.7,"maxTokens":4096}
   setupComplete     Boolean  @default(false) // True after setup wizard is completed
   aktif           Boolean  @default(true)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+}
+
+// Pengunjung - Visitor tracking for realcount/realtime
+model Pengunjung {
+  id          String   @id @default(cuid())
+  sessionId   String   // Unique per browser session (generated client-side)
+  ipAddress   String?  // Client IP address
+  userAgent   String?  // Browser user agent
+  halaman     String?  // Current page/view
+  lastActive  DateTime @default(now()) // Last heartbeat timestamp
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([lastActive])
+  @@index([createdAt])
+  @@unique([sessionId])
 }

@@ -49,6 +49,7 @@ import { usePengaturan } from "@/context/PengaturanContext";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import SplashLoader from "@/components/dashboard/SplashLoader";
+import { useVisitorTracker } from "@/hooks/use-visitor-tracker";
 
 export default function Home() {
   const { pengaturan, logoSrc } = usePengaturan();
@@ -61,6 +62,7 @@ export default function Home() {
   const [tahun, setTahun] = useState<number>(0); // 0 = not yet initialized
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { stats: visitorStats } = useVisitorTracker(activeView);
 
   // Setup wizard state
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null); // null = checking
@@ -378,6 +380,8 @@ export default function Home() {
             }
           }}
           isRefreshing={isRefreshing}
+          visitorOnline={visitorStats.online}
+          visitorToday={visitorStats.today}
         />
 
         <main className="flex-1 p-4 pb-20 lg:p-6 lg:pb-6 overflow-auto">
@@ -413,7 +417,7 @@ export default function Home() {
           }}
         >
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <img
                 src={logoSrc}
                 alt="Logo Kabupaten Seruyan"
@@ -424,10 +428,35 @@ export default function Home() {
               <p className="text-xs text-emerald-100">
                 © {new Date().getFullYear()} {pengaturan.namaPemerintah}
               </p>
+              <span className="text-emerald-200/40">|</span>
+              <span className="text-[10px] font-mono font-semibold text-emerald-200/80">
+                v{pengaturan.versiAplikasi || "1.0.0"}
+              </span>
             </div>
-            <p className="text-[10px] text-emerald-200/60">
-              Dashboard Monitoring Pengelolaan Keuangan Daerah
-            </p>
+            <div className="flex items-center gap-3">
+              {/* Visitor stats */}
+              <div className="flex items-center gap-2 text-[10px] text-emerald-200/70">
+                <span className="flex items-center gap-1">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                  </span>
+                  <span className="ml-0.5 font-semibold text-emerald-100">{visitorStats.online}</span> online
+                </span>
+                <span className="text-emerald-200/40">•</span>
+                <span>
+                  <span className="font-semibold text-emerald-100">{visitorStats.today}</span> hari ini
+                </span>
+                <span className="text-emerald-200/40">•</span>
+                <span>
+                  <span className="font-semibold text-emerald-100">{visitorStats.total}</span> total
+                </span>
+              </div>
+              <span className="text-emerald-200/40">|</span>
+              <p className="text-[10px] text-emerald-200/60">
+                Dashboard Monitoring Pengelolaan Keuangan Daerah
+              </p>
+            </div>
           </div>
         </footer>
       </div>

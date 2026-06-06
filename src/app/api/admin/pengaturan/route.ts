@@ -89,6 +89,7 @@ export async function PUT(request: Request) {
       'emailInstansi',
       'websiteInstansi',
       'loaderImageBase64',
+      'versiAplikasi',
     ] as const
 
     for (const field of stringFields) {
