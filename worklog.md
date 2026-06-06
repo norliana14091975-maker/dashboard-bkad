@@ -599,3 +599,41 @@ Stage Summary:
 - Frontend shows OPD name as teal badge in collapsed view and prominent "OPD Pengampu" box in expanded detail
 - Kepala Daerah can now easily identify which OPD each risk finding belongs to
 - Filter by OPD allows focused review of specific OPD's risk items
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Add dual loader feature (Loader Klasik / Loader Modern) with settings selector
+
+Work Log:
+- Added `loaderType` String field to `PengaturanAplikasi` Prisma model (default: "classic")
+- Ran `bun run db:push` to sync schema to database
+- Updated `PengaturanData` type in `PengaturanContext.tsx` to include `loaderType: string`
+- Updated `DEFAULT_PENGATURAN` in context with `loaderType: "classic"`
+- Updated settings parsing in context's `fetchSettings` to include `loaderType`
+- Updated `SettingsManager.tsx`:
+  - Added `loaderType` to local `PengaturanData` interface and `DEFAULT_SETTINGS`
+  - Added loader type fetch in `fetchSettings`
+  - Added visual loader type selector UI with two card buttons:
+    - "Loader Klasik" (classic) - dark background with circular progress & percentage
+    - "Loader Modern" (modern) - gradient background with orbit animation, logo, and government name
+  - Each option shows a mini preview of the loader style
+  - Description text updates based on selected loader type
+  - Loader image upload (GIF) section now only shows for "classic" loader
+- Updated `page.tsx`:
+  - Imported `SplashLoader` component
+  - Added `loaderExiting` state for modern loader fade-out animation
+  - Updated `renderContent()` to conditionally render `ModernSplashLoader` or `LoadingSkeleton`
+  - Updated `fetchData` to set `loaderExiting=true` when modern loader completes
+  - Created `ModernSplashLoader` wrapper component with `onExitComplete` callback for smooth transitions
+- Updated API route (`/api/admin/pengaturan/route.ts`):
+  - Added `loaderType` field validation (must be "classic" or "modern")
+- Added `animate-loader-shimmer` CSS keyframes and class to `globals.css` (was missing for SplashLoader)
+- All lint checks pass
+
+Stage Summary:
+- Database schema updated with `loaderType` field
+- Two loader styles available: Classic (BudgetLoader) and Modern (SplashLoader)
+- Settings UI has visual selector with previews
+- Modern loader has proper fade-out animation when loading completes
+- API supports saving/loading loaderType setting

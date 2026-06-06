@@ -1,0 +1,15 @@
+▲ Next.js 16.1.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://21.0.13.172:3000
+- Environments: .env
+
+✓ Starting...
+✓ Ready in 1036ms
+ GET / 200 in 2.8s (compile: 2.3s, render: 494ms)
+⚠ Blocked cross-origin request from 21.0.13.172 to /_next/* resource. To allow this, configure "allowedDevOrigins" in next.config
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /api/setup 200 in 281ms (compile: 164ms, render: 117ms)
+ GET /api/dashboard 200 in 126ms (compile: 54ms, render: 73ms)
+ GET /api/dashboard?tahun=2025 200 in 30ms (compile: 6ms, render: 24ms)
+ GET /api/pengaturan 200 in 573ms (compile: 127ms, render: 446ms)
+ GET /api/auth/session 200 in 792ms (compile: 779ms, render: 14ms)

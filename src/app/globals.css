@@ -177,6 +177,17 @@
   animation: shimmer-text 4s linear infinite;
 }
 
+/* Loader shimmer sweep for SplashLoader progress bar */
+@keyframes loader-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-loader-shimmer {
+  background-size: 200% 100%;
+  animation: loader-shimmer 2s linear infinite;
+}
+
 /* Floating orb animation */
 @keyframes float-orb {
   0%, 100% { transform: translateY(0px) scale(1); }

@@ -255,6 +255,7 @@ model PengaturanAplikasi {
   emailInstansi   String?  // Email instansi
   websiteInstansi String?  // Website instansi
   sidebarConfig     String?  // JSON string: sidebar visibility per role. e.g. {"hiddenItems":{"admin":[],"opd":["copilot"],"bupati":[]}}
+  loaderType           String  @default("classic") // Loader style: "classic" (BudgetLoader) or "modern" (SplashLoader)
   loaderDisplayTime    Int     @default(5000) // Minimum display time for budget loader in milliseconds
   loaderImageBase64    String? // Base64 encoded GIF/image for loader center display
   autoRefreshInterval  Int     @default(0) // Auto-refresh interval in minutes (0 = disabled)

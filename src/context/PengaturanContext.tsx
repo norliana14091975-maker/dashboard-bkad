@@ -61,6 +61,7 @@ export type PengaturanData = {
   emailInstansi: string | null;
   websiteInstansi: string | null;
   sidebarConfig: SidebarVisibility | null;
+  loaderType: string; // "classic" (BudgetLoader) or "modern" (SplashLoader)
   loaderDisplayTime: number;
   loaderImageBase64: string | null;
   autoRefreshInterval: number;
@@ -87,6 +88,7 @@ const DEFAULT_PENGATURAN: PengaturanData = {
       public: ["ringkasan-eksekutif", "copilot"],
     },
   },
+  loaderType: "classic",
   loaderDisplayTime: 5000,
   loaderImageBase64: null,
   autoRefreshInterval: 0,
@@ -178,6 +180,7 @@ export function PengaturanProvider({ children }: { children: ReactNode }) {
         setPengaturan({
           ...raw,
           sidebarConfig: parsedSidebarConfig,
+          loaderType: raw.loaderType || "classic",
           loaderDisplayTime: raw.loaderDisplayTime ?? 5000,
           loaderImageBase64: raw.loaderImageBase64 ?? null,
           autoRefreshInterval: raw.autoRefreshInterval ?? 0,

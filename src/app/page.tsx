@@ -48,6 +48,7 @@ import {
 import { usePengaturan } from "@/context/PengaturanContext";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
+import SplashLoader from "@/components/dashboard/SplashLoader";
 
 export default function Home() {
   const { pengaturan, logoSrc } = usePengaturan();
@@ -55,6 +56,7 @@ export default function Home() {
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loaderExiting, setLoaderExiting] = useState(false); // For modern loader fade-out
   const [error, setError] = useState<string | null>(null);
   const [tahun, setTahun] = useState<number>(0); // 0 = not yet initialized
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
@@ -77,6 +79,7 @@ export default function Home() {
 
   const fetchData = useCallback(async (tahunParam: number) => {
     setLoading(true);
+    setLoaderExiting(false);
     setError(null);
     const startTime = Date.now();
     const minDisplay = minLoadingRef.current;
@@ -100,11 +103,15 @@ export default function Home() {
           await new Promise((r) => setTimeout(r, remaining));
         }
       }
+      // For modern loader: trigger fade-out animation before unmounting
+      if (pengaturan.loaderType === "modern") {
+        setLoaderExiting(true);
+      }
       setLoading(false);
       // Mark the initial data load time for auto-refresh countdown
       lastRefreshRef.current = Date.now();
     }
-  }, [tahun]);
+  }, [tahun, pengaturan.loaderType]);
 
   // Silent refresh — updates data in background without showing loader
   const silentRefresh = useCallback(async (tahunParam: number) => {
@@ -293,7 +300,13 @@ export default function Home() {
       return <AdminPanel tahun={tahun} tahunList={data?.tahunList || []} />;
     }
 
-    if (loading) return <LoadingSkeleton />;
+    // Modern loader: keep showing during fade-out animation
+    if (loading || loaderExiting) {
+      if (pengaturan.loaderType === "modern") {
+        return <ModernSplashLoader isLoading={loading} onExitComplete={() => setLoaderExiting(false)} />;
+      }
+      if (loading) return <LoadingSkeleton />;
+    }
     if (error) return <ErrorState error={error} onRetry={() => fetchData(tahun)} />;
     if (!data) return null;
 
@@ -1095,6 +1108,37 @@ function LoadingSkeleton() {
         }
       `}</style>
     </div>
+  );
+}
+
+// ============ MODERN SPLASH LOADER WRAPPER ============
+function ModernSplashLoader({ isLoading, onExitComplete }: { isLoading: boolean; onExitComplete: () => void }) {
+  const { pengaturan, logoSrc } = usePengaturan();
+  const MIN_LOADING_MS = pengaturan.loaderDisplayTime ?? 5000;
+
+  // When loading completes, give the SplashLoader time to animate its exit
+  // before the parent unmounts it
+  useEffect(() => {
+    if (!isLoading) {
+      const timer = setTimeout(() => {
+        onExitComplete();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, onExitComplete]);
+
+  return (
+    <SplashLoader
+      logoSrc={logoSrc}
+      namaPemerintah={pengaturan.namaPemerintah}
+      namaInstansi={pengaturan.namaInstansi}
+      warnaPrimary={pengaturan.warnaPrimary}
+      warnaSecondary={pengaturan.warnaSecondary}
+      warnaAccent={pengaturan.warnaAccent}
+      warnaDark={pengaturan.warnaDark}
+      waktuTampil={MIN_LOADING_MS}
+      isLoading={isLoading}
+    />
   );
 }
 

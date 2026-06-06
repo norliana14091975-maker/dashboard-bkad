@@ -181,6 +181,17 @@ export async function PUT(request: Request) {
       }
     }
 
+    // loaderType field — string: "classic" or "modern"
+    if (body.loaderType !== undefined) {
+      if (typeof body.loaderType !== 'string' || !['classic', 'modern'].includes(body.loaderType)) {
+        return NextResponse.json(
+          { error: 'loaderType must be either "classic" or "modern"' },
+          { status: 400 }
+        )
+      }
+      updateData.loaderType = body.loaderType
+    }
+
     // loaderDisplayTime field — integer in milliseconds
     if (body.loaderDisplayTime !== undefined) {
       if (typeof body.loaderDisplayTime !== 'number' || body.loaderDisplayTime < 0 || body.loaderDisplayTime > 30000) {

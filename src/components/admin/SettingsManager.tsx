@@ -67,6 +67,7 @@ interface PengaturanData {
   emailInstansi: string | null;
   websiteInstansi: string | null;
   sidebarConfig: SidebarVisibility | null;
+  loaderType: string;
   loaderDisplayTime: number;
   loaderImageBase64: string | null;
   autoRefreshInterval: number;
@@ -92,6 +93,7 @@ const DEFAULT_SETTINGS: Omit<PengaturanData, "id"> = {
       public: ["ringkasan-eksekutif", "copilot"],
     },
   },
+  loaderType: "classic",
   loaderDisplayTime: 5000,
   loaderImageBase64: null,
   autoRefreshInterval: 0,
@@ -301,6 +303,7 @@ export default function SettingsManager() {
         emailInstansi: data.emailInstansi ?? "",
         websiteInstansi: data.websiteInstansi ?? "",
         sidebarConfig: parsedSidebarConfig,
+        loaderType: data.loaderType || "classic",
         loaderDisplayTime: data.loaderDisplayTime ?? 5000,
         loaderImageBase64: data.loaderImageBase64 ?? null,
         autoRefreshInterval: data.autoRefreshInterval ?? 0,
@@ -1044,13 +1047,117 @@ export default function SettingsManager() {
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
             <Activity className="w-5 h-5" style={{ color: currentPengaturan.warnaPrimary }} />
-            Durasi Loader
+            Pengaturan Loader
           </CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            Atur berapa lama animasi loader (BudgetLoader) ditampilkan saat memuat data dashboard.
+            Pilih gaya loader dan atur berapa lama animasi loader ditampilkan saat memuat data dashboard.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Loader Type Selector */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Gaya Loader</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Classic Loader Option */}
+              <button
+                type="button"
+                onClick={() => handleFieldChange("loaderType", "classic")}
+                className={`relative flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all text-left ${
+                  form.loaderType === "classic"
+                    ? "border-current shadow-md"
+                    : "border-border hover:border-foreground/30"
+                }`}
+                style={
+                  form.loaderType === "classic"
+                    ? { backgroundColor: `${currentPengaturan.warnaPrimary}08`, borderColor: `${currentPengaturan.warnaPrimary}60`, color: currentPengaturan.warnaPrimary }
+                    : undefined
+                }
+              >
+                {/* Selected indicator */}
+                {form.loaderType === "classic" && (
+                  <div
+                    className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+                    style={{ backgroundColor: currentPengaturan.warnaPrimary }}
+                  >
+                    ✓
+                  </div>
+                )}
+                {/* Mini preview of classic loader */}
+                <div className="w-16 h-16 rounded-xl bg-slate-950 flex items-center justify-center relative overflow-hidden">
+                  <div className="absolute h-10 w-10 border-2 border-emerald-500/30 rounded-full" style={{ animation: "spin 3s linear infinite" }} />
+                  <span className="text-xl relative z-10">📊</span>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-foreground">Loader Klasik</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Tampilan lama dengan lingkaran progress</p>
+                </div>
+              </button>
+
+              {/* Modern Loader Option */}
+              <button
+                type="button"
+                onClick={() => handleFieldChange("loaderType", "modern")}
+                className={`relative flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all text-left ${
+                  form.loaderType === "modern"
+                    ? "border-current shadow-md"
+                    : "border-border hover:border-foreground/30"
+                }`}
+                style={
+                  form.loaderType === "modern"
+                    ? { backgroundColor: `${currentPengaturan.warnaPrimary}08`, borderColor: `${currentPengaturan.warnaPrimary}60`, color: currentPengaturan.warnaPrimary }
+                    : undefined
+                }
+              >
+                {/* Selected indicator */}
+                {form.loaderType === "modern" && (
+                  <div
+                    className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+                    style={{ backgroundColor: currentPengaturan.warnaPrimary }}
+                  >
+                    ✓
+                  </div>
+                )}
+                {/* Mini preview of modern loader */}
+                <div
+                  className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden"
+                  style={{ background: `linear-gradient(135deg, ${currentPengaturan.warnaDark}, ${currentPengaturan.warnaPrimary})` }}
+                >
+                  <div className="absolute h-12 w-12 border border-dashed rounded-full" style={{ borderColor: `${currentPengaturan.warnaAccent}40`, animation: "spin 4s linear infinite" }} />
+                  <img
+                    src={logoSrc}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="relative z-10 object-contain"
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-foreground">Loader Modern</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Tampilan baru dengan orbit animasi & logo</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Description based on selected type */}
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40">
+              <Activity className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground">
+                {form.loaderType === "modern" ? (
+                  <>
+                    <p className="font-medium text-foreground/80">Loader Modern (SplashLoader)</p>
+                    <p>Menampilkan logo instansi dengan animasi orbit, progress bar, dan nama pemerintah. Cocok untuk tampilan profesional dan formal.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-foreground/80">Loader Klasik (BudgetLoader)</p>
+                    <p>Menampilkan lingkaran progress dengan persentase dan ikon/gambar di tengah. Mendukung upload GIF animasi.</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4" />
           <div className="flex items-center gap-6">
             <div className="flex-1 space-y-3">
               <div className="flex items-center justify-between">
@@ -1124,7 +1231,8 @@ export default function SettingsManager() {
             </div>
           </div>
 
-          {/* Loader Image (GIF) Upload */}
+          {/* Loader Image (GIF) Upload — only for classic loader */}
+          {form.loaderType === "classic" && (
           <div className="border-t pt-4 mt-4">
             <div className="flex items-center gap-2 mb-3">
               <ImagePlus className="w-4 h-4 text-muted-foreground" />
@@ -1204,6 +1312,7 @@ export default function SettingsManager() {
               </div>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 
