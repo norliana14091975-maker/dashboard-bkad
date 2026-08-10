@@ -262,17 +262,66 @@ export async function POST(request: Request) {
  * Also tries to capture associated data (nama akun, anggaran, realisasi) from the same line.
  */
 async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
-  // Dynamic import for pdf-parse (CommonJS module)
-  const pdfParse = (await import('pdf-parse')).default || (await import('pdf-parse'))
+  // Use pdfjs-dist for reliable PDF text extraction
+  // We use the legacy build which works in Node.js environments
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js')
 
-  const pdfData = await pdfParse(buffer)
-  const text = pdfData.text
+  // Set the worker source to the actual worker file
+  // This avoids the "Cannot find module './pdf.worker.js'" error
+  const path = await import('path')
+  const workerPath = path.join(
+    process.cwd(),
+    'node_modules/pdfjs-dist/legacy/build/pdf.worker.js'
+  )
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath
 
-  if (!text || text.trim().length === 0) {
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    // Disable font rendering to avoid canvas dependency
+    disableFontFace: true,
+  })
+
+  const pdfDocument = await loadingTask.promise
+  const allText: string[] = []
+
+  // Extract text from all pages
+  for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+    const page = await pdfDocument.getPage(pageNum)
+    const textContent = await page.getTextContent()
+
+    // Group text items by Y position to reconstruct lines
+    const itemsByY = new Map<number, Array<{ x: number; text: string }>>()
+    for (const item of textContent.items) {
+      if (!('str' in item) || typeof item.str !== 'string') continue
+      const text = item.str
+      if (!text || text.trim().length === 0) continue
+
+      const transform = (item as any).transform
+      const y = Math.round(transform ? transform[5] : 0)
+      const x = transform ? transform[4] : 0
+
+      if (!itemsByY.has(y)) {
+        itemsByY.set(y, [])
+      }
+      itemsByY.get(y)!.push({ x, text })
+    }
+
+    // Sort by Y (descending for top-to-bottom) then by X (ascending for left-to-right)
+    const sortedYs = Array.from(itemsByY.keys()).sort((a, b) => b - a)
+    for (const y of sortedYs) {
+      const items = itemsByY.get(y)!
+      items.sort((a, b) => a.x - b.x)
+      const lineText = items.map(i => i.text).join(' ')
+      allText.push(lineText)
+    }
+  }
+
+  if (allText.length === 0) {
     return []
   }
 
-  const lines = text.split('\n')
+  const lines = allText
   const results: ExtractedAkun[] = []
 
   // Regex patterns for account codes with dots
@@ -282,9 +331,6 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
 
   // Main pattern: match sequences of digits separated by dots, 3+ segments
   const kodeAkunPattern = /(\d+(?:\.\d+){2,})/g
-
-  // Number pattern for extracting anggaran/realisasi
-  const numberPattern = /[\d.,]+/g
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]

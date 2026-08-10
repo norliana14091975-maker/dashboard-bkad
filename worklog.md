@@ -795,3 +795,29 @@ Stage Summary:
 - All three data managers (Pendapatan, Belanja, Pembiayaan) have both Import PDF and Import Excel buttons
 - Both import dialogs (PDF and Excel/CSV) now support OPD selection
 - No lint errors, dev server running cleanly
+---
+Task ID: 2
+Agent: main
+Task: Fix PDF upload failure and add kode akun prefix filter with multi-select
+
+Work Log:
+- Diagnosed PDF upload error: pdfParse is not a function - pdf-parse v2.x has incompatible API
+- Removed pdf-parse, installed pdfjs-dist@3.11.174 instead
+- Rewrote extractAkunFromPdf() using pdfjs-dist legacy build with Y-position text grouping
+- Fixed worker error by setting GlobalWorkerOptions.workerSrc to the actual worker file path
+- Tested full extraction with Node.js and browser fetch - works correctly
+- Added kode akun prefix filter feature:
+  - Defined KODE_AKUN_PREFIXES map with standard Indonesian government account code labels
+  - Created extractPrefixesFromKodeAkun() to detect unique prefixes at levels 1, 2, 3
+  - Added prefix filter UI with toggle switch, Pilih Semua/Kosongkan buttons
+  - Each prefix shown as clickable chip with code, label, and count badge
+  - Filter auto-enables when multiple prefixes are detected
+  - Table shows only rows matching selected prefixes (filteredImportRows)
+  - Added useMemo computed values for filtered rows and index mapping
+- Verified API returns correct data: kodeAkun, namaAkun, anggaran, realisasi extracted from PDF
+
+Stage Summary:
+- PDF upload now works using pdfjs-dist (replaces broken pdf-parse)
+- Kode akun prefix filter added with multi-select support (e.g., select 5.1 to only import Belanja Operasi)
+- Filter shows count per prefix, auto-selects all initially
+- All lint checks pass, no runtime errors

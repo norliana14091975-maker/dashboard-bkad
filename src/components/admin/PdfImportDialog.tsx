@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -46,6 +47,9 @@ import {
   Trash2,
   ShieldCheck,
   ShieldX,
+  Filter,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -107,6 +111,71 @@ const defaultKategori: Record<JenisData, string> = {
   pembiayaan: "Penerimaan",
 };
 
+// Common kode akun prefixes with labels (standard Indonesian government account codes)
+const KODE_AKUN_PREFIXES: Record<string, string> = {
+  "4": "Pendapatan",
+  "4.1": "Pendapatan - PAD",
+  "4.2": "Pendapatan - Transfer",
+  "4.3": "Pendapatan - Lain-Lain",
+  "5": "Belanja",
+  "5.1": "Belanja Operasi",
+  "5.1.01": "Belanja Operasi - Pegawai",
+  "5.1.02": "Belanja Operasi - Barang/Jasa",
+  "5.1.03": "Belanja Operasi - Modal",
+  "5.1.04": "Belanja Operasi - Bunga",
+  "5.1.05": "Belanja Operasi - Subsidi",
+  "5.1.06": "Belanja Operasi - Bantuan Sosial",
+  "5.1.07": "Belanja Operasi - Bantuan Keuangan",
+  "5.1.08": "Belanja Operasi - Tidak Terduga",
+  "5.2": "Belanja Modal",
+  "5.2.01": "Belanja Modal - Tanah",
+  "5.2.02": "Belanja Modal - Peralatan & Mesin",
+  "5.2.03": "Belanja Modal - Gedung & Bangunan",
+  "5.2.04": "Belanja Modal - Jalan, Irigasi & Jaringan",
+  "5.2.05": "Belanja Modal - Aset Tetap Lainnya",
+  "5.2.06": "Belanja Modal - Konstruksi Dalam Pengerjaan",
+  "5.3": "Belanja Tidak Terduga",
+  "5.4": "Belanja Transfer",
+  "6": "Pembiayaan",
+  "6.1": "Pembiayaan - Penerimaan",
+  "6.2": "Pembiayaan - Pengeluaran",
+  "7": "Surplus/Defisit",
+};
+
+// Extract prefixes from a list of kode akun
+function extractPrefixesFromKodeAkun(kodeAkunList: string[]): Array<{ prefix: string; label: string; count: number }> {
+  const prefixCount = new Map<string, number>();
+
+  for (const kode of kodeAkunList) {
+    const segments = kode.split(".");
+    if (segments.length < 2) continue;
+
+    // Level 1: "4", "5", "6"
+    const l1 = segments[0];
+    prefixCount.set(l1, (prefixCount.get(l1) || 0) + 1);
+
+    // Level 2: "4.1", "5.1", "5.2"
+    if (segments.length >= 2) {
+      const l2 = `${segments[0]}.${segments[1]}`;
+      prefixCount.set(l2, (prefixCount.get(l2) || 0) + 1);
+    }
+
+    // Level 3: "5.1.01", "5.2.02"
+    if (segments.length >= 3) {
+      const l3 = `${segments[0]}.${segments[1]}.${segments[2]}`;
+      prefixCount.set(l3, (prefixCount.get(l3) || 0) + 1);
+    }
+  }
+
+  return Array.from(prefixCount.entries())
+    .map(([prefix, count]) => ({
+      prefix,
+      label: KODE_AKUN_PREFIXES[prefix] || `Kode ${prefix}`,
+      count,
+    }))
+    .sort((a, b) => a.prefix.localeCompare(b.prefix));
+}
+
 export default function PdfImportDialog({
   open,
   onOpenChange,
@@ -137,6 +206,11 @@ export default function PdfImportDialog({
   // Kategori per row (for batch set)
   const [globalKategori, setGlobalKategori] = useState<string>(defaultKategori[jenis]);
   const [kategoriList, setKategoriList] = useState<string[]>([]);
+
+  // Kode akun prefix filter
+  const [availablePrefixes, setAvailablePrefixes] = useState<Array<{ prefix: string; label: string; count: number }>>([]);
+  const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
+  const [prefixFilterEnabled, setPrefixFilterEnabled] = useState(false);
 
   // Result
   const [result, setResult] = useState<{
@@ -217,11 +291,61 @@ export default function PdfImportDialog({
     setSelectedRows(new Set());
     setAllSelected(true);
     setGlobalKategori(defaultKategori[jenis]);
+    setAvailablePrefixes([]);
+    setSelectedPrefixes(new Set());
+    setPrefixFilterEnabled(false);
   }, [jenis]);
 
   useEffect(() => {
     if (!open) reset();
   }, [open, reset]);
+
+  // Computed: filtered import rows based on selected prefixes
+  const filteredImportRows = useMemo(() => {
+    if (!prefixFilterEnabled || selectedPrefixes.size === 0) {
+      return importRows;
+    }
+    return importRows.filter(row => {
+      return Array.from(selectedPrefixes).some(prefix => row.kodeAkun.startsWith(prefix));
+    });
+  }, [importRows, prefixFilterEnabled, selectedPrefixes]);
+
+  // Computed: filtered indices (mapping from filteredImportRows index to importRows index)
+  const filteredToOriginalIndex = useMemo(() => {
+    if (!prefixFilterEnabled || selectedPrefixes.size === 0) {
+      return importRows.map((_, i) => i);
+    }
+    const indices: number[] = [];
+    importRows.forEach((row, i) => {
+      if (Array.from(selectedPrefixes).some(prefix => row.kodeAkun.startsWith(prefix))) {
+        indices.push(i);
+      }
+    });
+    return indices;
+  }, [importRows, prefixFilterEnabled, selectedPrefixes]);
+
+  // Toggle a prefix filter
+  const togglePrefix = (prefix: string) => {
+    setSelectedPrefixes(prev => {
+      const next = new Set(prev);
+      if (next.has(prefix)) {
+        next.delete(prefix);
+      } else {
+        next.add(prefix);
+      }
+      return next;
+    });
+  };
+
+  // Select all prefixes
+  const selectAllPrefixes = () => {
+    setSelectedPrefixes(new Set(availablePrefixes.map(p => p.prefix)));
+  };
+
+  // Clear all prefixes
+  const clearAllPrefixes = () => {
+    setSelectedPrefixes(new Set());
+  };
 
   // Apply global kategori to all rows
   const applyGlobalKategori = () => {
@@ -314,6 +438,14 @@ export default function PdfImportDialog({
       setImportRows(rows);
       setSelectedRows(new Set(rows.map((_, i) => i)));
       setAllSelected(true);
+
+      // Extract available prefixes from the kode akun list
+      const prefixes = extractPrefixesFromKodeAkun(rows.map(r => r.kodeAkun));
+      setAvailablePrefixes(prefixes);
+      // Auto-select all prefixes initially
+      setSelectedPrefixes(new Set(prefixes.map(p => p.prefix)));
+      setPrefixFilterEnabled(prefixes.length > 1); // Enable filter if multiple prefixes found
+
       setStep("preview");
     } catch (err) {
       toast({
@@ -656,7 +788,7 @@ export default function PdfImportDialog({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Badge className={`${jenisColors[jenis]} text-white`}>
-                      {extractedData.length} kode akun ditemukan
+                      {extractedData.length} kode akun ditemukan ({filteredImportRows.length} ditampilkan)
                     </Badge>
                     <span className="text-sm text-muted-foreground">
                       {uploadedFileName}
@@ -693,6 +825,68 @@ export default function PdfImportDialog({
                   </div>
                 )}
 
+                {/* Kode Akun Prefix Filter */}
+                {availablePrefixes.length > 0 && (
+                  <div className="rounded-lg border bg-muted/30 overflow-hidden">
+                    <div className="px-3 py-2 bg-muted/50 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-semibold">Filter Kode Akun</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={prefixFilterEnabled}
+                          onCheckedChange={setPrefixFilterEnabled}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {prefixFilterEnabled ? "Aktif" : "Nonaktif"}
+                        </span>
+                      </div>
+                    </div>
+                    {prefixFilterEnabled && (
+                      <div className="p-3 space-y-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Button variant="outline" size="sm" className="text-xs h-7" onClick={selectAllPrefixes}>
+                            Pilih Semua
+                          </Button>
+                          <Button variant="outline" size="sm" className="text-xs h-7" onClick={clearAllPrefixes}>
+                            Kosongkan
+                          </Button>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {selectedPrefixes.size} dari {availablePrefixes.length} prefix dipilih
+                            → <strong>{filteredImportRows.length}</strong> baris
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availablePrefixes.map(({ prefix, label, count }) => {
+                            const isSelected = selectedPrefixes.has(prefix);
+                            // Determine indent level based on dots
+                            const level = prefix.split(".").length - 1;
+                            return (
+                              <button
+                                key={prefix}
+                                onClick={() => togglePrefix(prefix)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 border ${
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                    : "bg-background text-foreground border-muted-foreground/20 hover:border-primary/50 hover:bg-muted"
+                                } ${level > 0 ? "ml-" + (level * 2) : ""}`}
+                              >
+                                <code className="font-mono">{prefix}</code>
+                                <span className="opacity-70">—</span>
+                                <span className="truncate max-w-[120px]">{label}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-1">
+                                  {count}
+                                </Badge>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Batch Kategori */}
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
                   <Label className="text-sm font-medium whitespace-nowrap">Kategori Semua Baris:</Label>
@@ -718,7 +912,7 @@ export default function PdfImportDialog({
                     />
                   )}
                   <span className="text-xs text-muted-foreground">
-                    ({selectedRows.size} dari {importRows.length} baris dipilih)
+                    ({selectedRows.size} dari {filteredImportRows.length} baris tampil, {importRows.length} total)
                   </span>
                 </div>
 
@@ -746,22 +940,23 @@ export default function PdfImportDialog({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {importRows.map((row, idx) => {
+                        {filteredImportRows.map((row, filteredIdx) => {
+                          const originalIdx = filteredToOriginalIndex[filteredIdx];
                           const is17Digit = row.kodeAkun.length === 17;
                           return (
                             <TableRow
-                              key={idx}
-                              className={`${!selectedRows.has(idx) ? "opacity-40" : ""} ${is17Digit ? "bg-emerald-50/50 dark:bg-emerald-950/20" : ""}`}
+                              key={filteredIdx}
+                              className={`${!selectedRows.has(originalIdx) ? "opacity-40" : ""} ${is17Digit ? "bg-emerald-50/50 dark:bg-emerald-950/20" : ""}`}
                             >
                               <TableCell>
                                 <input
                                   type="checkbox"
-                                  checked={selectedRows.has(idx)}
-                                  onChange={() => toggleRow(idx)}
+                                  checked={selectedRows.has(originalIdx)}
+                                  onChange={() => toggleRow(originalIdx)}
                                   className="rounded"
                                 />
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{filteredIdx + 1}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1.5">
                                   <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
@@ -777,7 +972,7 @@ export default function PdfImportDialog({
                               <TableCell>
                                 <Input
                                   value={row.namaAkun}
-                                  onChange={e => updateRowNamaAkun(idx, e.target.value)}
+                                  onChange={e => updateRowNamaAkun(originalIdx, e.target.value)}
                                   className="h-7 text-xs"
                                 />
                               </TableCell>
@@ -785,7 +980,7 @@ export default function PdfImportDialog({
                                 {kategoriList.length > 0 ? (
                                   <Select
                                     value={row.kategori}
-                                    onValueChange={val => updateRowKategori(idx, val)}
+                                    onValueChange={val => updateRowKategori(originalIdx, val)}
                                   >
                                     <SelectTrigger className="h-7 text-xs">
                                       <SelectValue />
@@ -799,7 +994,7 @@ export default function PdfImportDialog({
                                 ) : (
                                   <Input
                                     value={row.kategori}
-                                    onChange={e => updateRowKategori(idx, e.target.value)}
+                                    onChange={e => updateRowKategori(originalIdx, e.target.value)}
                                     className="h-7 text-xs"
                                   />
                                 )}
