@@ -1,7 +1,6 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { DashboardData, formatRupiah, formatPersentase, formatRupiahShort, getRealisasiBarClass } from "./types";
+import { DashboardData, formatRupiah, formatPersentase, formatRupiahShort } from "./types";
 import {
   Landmark,
   TrendingUp,
@@ -25,13 +24,20 @@ type CardData = {
   fullValue: string;
   subtitle: string;
   Icon: LucideIcon;
-  gradientFrom: string;
-  gradientTo: string;
+  /** Tailwind class for icon container bg (10% opacity) */
   iconBg: string;
+  /** Tailwind class for icon color (full opacity) */
   iconColor: string;
+  /** Hex/oklch color for left border & progress gradient */
+  accentColor: string;
+  /** Lighter shade for progress bar gradient end */
+  accentColorLight: string;
+  /** Tailwind class for left border color */
+  borderClass: string;
   persentase: number | undefined;
   realisasiValue: string | undefined;
-  accentColor: string;
+  anggaranLabel: string | undefined;
+  sisaLabel: string | undefined;
   sparkle: boolean;
 };
 
@@ -66,23 +72,33 @@ function formatCounterValue(num: number): string {
   return Math.round(num).toLocaleString("id-ID");
 }
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
-  visible: (i: number) => ({
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 24, scale: 0.96 },
+  visible: {
     opacity: 1,
     y: 0,
     scale: 1,
     transition: {
-      delay: 0.1 + i * 0.08,
-      duration: 0.6,
+      duration: 0.5,
       ease: [0.22, 1, 0.36, 1],
     },
-  }),
+  },
 };
 
 export default function SummaryCards({ data }: SummaryCardsProps) {
   const { ringkasan } = data;
   const { pengaturan } = usePengaturan();
+
+  const sisaPendapatan = ringkasan.totalPendapatan - ringkasan.realisasiPendapatan;
+  const sisaBelanja = ringkasan.totalBelanja - ringkasan.realisasiBelanja;
 
   const cards: CardData[] = [
     {
@@ -92,13 +108,15 @@ export default function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: formatRupiahShort(ringkasan.totalAnggaran),
       subtitle: "Anggaran Pendapatan & Belanja Daerah",
       Icon: Landmark,
-      gradientFrom: pengaturan.warnaPrimary,
-      gradientTo: pengaturan.warnaSecondary,
-      iconBg: "bg-gradient-to-br from-emerald-400 to-green-600",
-      iconColor: "text-white",
+      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+      accentColor: "#059669",
+      accentColorLight: "#34d399",
+      borderClass: "border-l-emerald-500",
       persentase: undefined,
       realisasiValue: undefined,
-      accentColor: pengaturan.warnaPrimary,
+      anggaranLabel: undefined,
+      sisaLabel: undefined,
       sparkle: true,
     },
     {
@@ -108,13 +126,15 @@ export default function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: formatRupiahShort(ringkasan.totalPendapatan),
       subtitle: `Realisasi: ${formatPersentase(ringkasan.persentasePendapatan)}`,
       Icon: TrendingUp,
-      gradientFrom: "#0D47A1",
-      gradientTo: "#1565C0",
-      iconBg: "bg-gradient-to-br from-blue-400 to-blue-700",
-      iconColor: "text-white",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600",
+      accentColor: "#2563eb",
+      accentColorLight: "#60a5fa",
+      borderClass: "border-l-blue-500",
       persentase: ringkasan.persentasePendapatan,
       realisasiValue: formatRupiahShort(ringkasan.realisasiPendapatan),
-      accentColor: "#0D47A1",
+      anggaranLabel: formatRupiahShort(ringkasan.totalPendapatan),
+      sisaLabel: formatRupiahShort(sisaPendapatan),
       sparkle: false,
     },
     {
@@ -124,13 +144,15 @@ export default function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: formatRupiahShort(ringkasan.totalBelanja),
       subtitle: `Realisasi: ${formatPersentase(ringkasan.persentaseBelanja)}`,
       Icon: TrendingDown,
-      gradientFrom: "#B71C1C",
-      gradientTo: "#C62828",
-      iconBg: "bg-gradient-to-br from-red-400 to-red-700",
-      iconColor: "text-white",
+      iconBg: "bg-rose-50",
+      iconColor: "text-rose-600",
+      accentColor: "#e11d48",
+      accentColorLight: "#fb7185",
+      borderClass: "border-l-rose-500",
       persentase: ringkasan.persentaseBelanja,
       realisasiValue: formatRupiahShort(ringkasan.realisasiBelanja),
-      accentColor: "#B71C1C",
+      anggaranLabel: formatRupiahShort(ringkasan.totalBelanja),
+      sisaLabel: formatRupiahShort(sisaBelanja),
       sparkle: false,
     },
     {
@@ -140,127 +162,118 @@ export default function SummaryCards({ data }: SummaryCardsProps) {
       fullValue: formatRupiahShort(ringkasan.totalPembiayaan),
       subtitle: "Net Pembiayaan Daerah",
       Icon: DollarSign,
-      gradientFrom: "#E65100",
-      gradientTo: "#F57C00",
-      iconBg: "bg-gradient-to-br from-orange-400 to-orange-600",
-      iconColor: "text-white",
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600",
+      accentColor: "#d97706",
+      accentColorLight: "#fbbf24",
+      borderClass: "border-l-amber-500",
       persentase: undefined,
       realisasiValue: undefined,
-      accentColor: "#E65100",
+      anggaranLabel: undefined,
+      sisaLabel: undefined,
       sparkle: false,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <motion.div
+      className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {cards.map((card, index) => (
-        <AnimatedSummaryCard key={card.title} card={card} index={index} />
+        <ModernSummaryCard key={card.title} card={card} index={index} />
       ))}
-    </div>
+    </motion.div>
   );
 }
 
-function AnimatedSummaryCard({ card, index }: { card: CardData; index: number }) {
+function ModernSummaryCard({ card, index }: { card: CardData; index: number }) {
   const counterValue = useAnimatedCounter(card.value, 2);
 
   return (
     <motion.div
-      custom={index}
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
+      variants={itemVariants}
+      whileHover={{
+        y: -4,
+        transition: { type: "spring", stiffness: 300 },
+      }}
+      className="group relative"
     >
-      <Card className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-500 group relative">
-        {/* Animated gradient top bar with shimmer */}
-        <div
-          className="h-1.5 relative overflow-hidden"
-          style={{
-            background: `linear-gradient(to right, ${card.gradientFrom}, ${card.gradientTo})`,
-          }}
-        >
+      <div
+        className={`modern-card rounded-2xl p-5 border-l-[4px] ${card.borderClass}
+          hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.06),0_20px_40px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.15)]
+          transition-all duration-300`}
+      >
+        {/* Icon + Title row */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-muted-foreground">
+              {card.title}
+            </p>
+            <div className="text-2xl font-bold tracking-tight mt-1">
+              Rp {formatCounterValue(counterValue)}
+            </div>
+          </div>
+
+          {/* Icon container */}
           <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: "linear" }}
-          />
+            className={`${card.iconBg} w-10 h-10 rounded-xl flex items-center justify-center shrink-0`}
+            whileHover={{ scale: 1.1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 15 }}
+          >
+            <card.Icon className={`w-5 h-5 ${card.iconColor}`} />
+          </motion.div>
         </div>
 
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {card.title}
-              </p>
-              <div className="text-2xl lg:text-3xl font-extrabold mt-1.5 tracking-tight">
-                Rp {formatCounterValue(counterValue)}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {card.fullValue}
-              </p>
-            </div>
-
-            {/* Animated icon container */}
-            <div className={`${card.iconBg} p-3 rounded-xl shrink-0 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative`}>
-              <card.Icon className="w-6 h-6 text-white" />
-              {/* Glow effect behind icon */}
-              <div className="absolute inset-0 rounded-xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            </div>
-          </div>
-
-          {/* Subtitle */}
-          <div className="mt-3 flex items-center gap-1.5">
-            {card.sparkle && (
-              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
-            )}
-            <p className="text-[11px] text-muted-foreground font-medium">
-              {card.subtitle}
-            </p>
-          </div>
-
-          {/* Progress bar for realisasi */}
-          {card.persentase !== undefined && (
-            <div className="mt-4 pt-3 border-t border-border/50">
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="text-muted-foreground font-medium">Realisasi</span>
-                <span className="font-bold text-foreground text-sm">
-                  {formatPersentase(card.persentase)}
-                </span>
-              </div>
-              <div className="h-2.5 bg-muted/80 rounded-full overflow-hidden relative">
-                <motion.div
-                  className={`h-full rounded-full relative ${getRealisasiBarClass(card.persentase)}`}
-                  initial={{ width: 0 }}
-                  animate={{
-                    width: `${Math.min(card.persentase, 100)}%`,
-                  }}
-                  transition={{ duration: 1.5, delay: 0.3 + index * 0.1, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  {/* Shimmer effect on bar */}
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                    animate={{ x: ["-100%", "100%"] }}
-                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 3, ease: "linear", delay: 1 }}
-                  />
-                </motion.div>
-              </div>
-              {card.realisasiValue && (
-                <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                  Terealisasi: {card.realisasiValue}
-                </p>
-              )}
-            </div>
+        {/* Subtitle with optional sparkle */}
+        <div className="mt-2 flex items-center gap-1.5">
+          {card.sparkle && (
+            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-500" />
           )}
-        </CardContent>
+          <p className="text-xs text-muted-foreground">
+            {card.subtitle}
+          </p>
+        </div>
 
-        {/* Hover gradient overlay */}
-        <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-[0.03] transition-opacity duration-500 pointer-events-none rounded-xl"
-          style={{
-            background: `linear-gradient(135deg, ${card.accentColor}, transparent)`,
-          }}
-        />
-      </Card>
+        {/* Progress bar for realisasi */}
+        {card.persentase !== undefined && (
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground font-medium">
+                Realisasi
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {formatPersentase(card.persentase)}
+              </span>
+            </div>
+            <div className="h-1.5 bg-black/[0.06] rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                style={{
+                  background: `linear-gradient(to right, ${card.accentColor}, ${card.accentColorLight})`,
+                }}
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min(card.persentase, 100)}%`,
+                }}
+                transition={{
+                  duration: 1.2,
+                  delay: 0.3 + index * 0.08,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              />
+            </div>
+            {/* Sub-info: Anggaran & Sisa */}
+            {card.anggaranLabel && card.sisaLabel && (
+              <p className="text-xs text-muted-foreground">
+                Anggaran: {card.anggaranLabel} &middot; Sisa: {card.sisaLabel}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }

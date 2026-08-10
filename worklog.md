@@ -156,3 +156,86 @@ Stage Summary:
   3. Worker configuration: `workerSrc = ''` for server-side main thread processing
 - `serverExternalPackages` in next.config.ts prevents Turbopack from bundling pdfjs-dist and its browser-only dependencies
 - All PDF parsing tests pass successfully
+
+---
+Task ID: 5
+Agent: Main
+Task: Revamp tampilan menjadi lebih modern
+
+Work Log:
+- Explored entire UI codebase: page.tsx (1206 lines), 15+ dashboard components, auth, admin, settings
+- Identified key areas for modernization: Login, Sidebar, Header, SummaryCards, Hero, QuickNav, Footer, MobileNav
+- Executed parallel revamp with specialized agents:
+
+1. **globals.css** — Added 140+ lines of modern CSS utilities:
+   - `.modern-glass` — Glassmorphism with blur + saturate + transparent bg, dark mode variant
+   - `.modern-card` — Elevated card with layered shadows + hover lift, dark variant
+   - `.modern-input-focus` — Green focus ring
+   - `.modern-gradient-text` — Green gradient clipped text
+   - `.modern-border` — Ultra-subtle 6% opacity border
+   - `.modern-sidebar-item` — Sidebar item with hover tint + active inset shadow
+   - `.modern-badge-glow` — Gold glow shadow
+   - `.modern-page-enter` — Slide-up fade entrance animation
+   - `.modern-shimmer` — Skeleton loading shimmer, dark variant
+   - `.modern-tooltip` — Dark glass tooltip
+
+2. **LoginForm.tsx** — Full glassmorphism redesign:
+   - Desktop: split layout (left brand panel with gradient + orbs | right form panel)
+   - Mobile: single column with glass card
+   - Framer-motion staggered entrance animations
+   - Modern gradient button with hover scale
+   - Icon-prefixed inputs (Mail, Lock)
+   - Dark mode support
+
+3. **Sidebar.tsx** — Modern navigation:
+   - Active item: left accent bar (3px, warnaAccent) + subtle background tint
+   - Hover: warnaPrimary at 4% opacity
+   - Chevron: CSS rotate transition instead of icon swap
+   - Child items: dotted vertical connector line
+   - Brand: gradient text, muted subtitle
+   - Mobile: wider (288px), frosted glass overlay
+
+4. **DashboardHeader.tsx** — Clean modern header:
+   - White/80 backdrop-blur instead of heavy gradient
+   - 2px top accent bar (warnaPrimary → warnaAccent)
+   - Larger view title, muted subtitle
+   - Removed breadcrumb row
+   - Clean icon buttons with subtle hover
+
+5. **Footer** — Minimal modern footer:
+   - White/60 backdrop-blur instead of gradient
+   - Compact single-line visitor stats
+   - Version in small pill badge
+
+6. **SummaryCards.tsx** — Modern glass cards:
+   - `modern-card` class with layered shadows + hover lift
+   - 4px colored left border (emerald/blue/rose/amber)
+   - Icon in rounded container (w-10 h-10, 10% opacity bg)
+   - Thin progress bar (h-1.5) with gradient fill
+   - Sub-info: "Anggaran: Rp X · Sisa: Rp Y" format
+
+7. **Hero + QuickNav** — Clean modern hero:
+   - Light gradient background (slate-50 → white)
+   - Single subtle accent blob instead of 4 orbs + rings + particles
+   - Institution name with modern-gradient-text
+   - Year badge as pill
+   - QuickNav: modern-card with colored left border, spring hover animation
+
+8. **MobileBottomNav.tsx** — Modern mobile nav:
+   - White/80 backdrop-blur instead of dark solid
+   - Gradient indicator bar (warnaPrimary → warnaAccent)
+   - text-foreground/text-muted-foreground colors
+   - Removed active dot for cleaner look
+
+- All changes preserve existing functionality
+- Lint passes with zero errors
+- Browser verified: page renders correctly, no console errors, all APIs return 200
+
+Stage Summary:
+- Complete modern UI revamp across 8 components + globals.css
+- Design language: glassmorphism, layered shadows, subtle borders, backdrop-blur, modern-gradient-text
+- Color system: semantic tokens with dark mode support throughout
+- Animations: framer-motion spring transitions, stagger effects, hover lifts
+- Typography: tracking-tight, font-semibold, larger sizes for emphasis
+- Mobile: frosted glass overlays, compact stats, clean bottom nav
+- Zero breaking changes — all functionality preserved

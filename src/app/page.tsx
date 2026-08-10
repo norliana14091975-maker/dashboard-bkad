@@ -410,52 +410,33 @@ export default function Home() {
         </main>
 
         {/* Footer — hidden on mobile (replaced by MobileBottomNav) */}
-        <footer
-          className="hidden lg:block text-white px-4 lg:px-6 py-3 mt-auto"
-          style={{
-            background: `linear-gradient(to right, ${pengaturan.warnaPrimary}, ${pengaturan.warnaSecondary})`,
-          }}
-        >
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
+        <footer className="hidden lg:block bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm border-t border-black/[0.06] dark:border-white/[0.06] px-4 lg:px-6 py-3 mt-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <img
                 src={logoSrc}
                 alt="Logo Kabupaten Seruyan"
-                width={24}
-                height={24}
-                className="w-6 h-6 object-contain"
+                width={16}
+                height={16}
+                className="w-4 h-4 object-contain"
               />
-              <p className="text-xs text-emerald-100">
+              <span className="text-xs text-muted-foreground">
                 © {new Date().getFullYear()} {pengaturan.namaPemerintah}
-              </p>
-              <span className="text-emerald-200/40">|</span>
-              <span className="text-[10px] font-mono font-semibold text-emerald-200/80">
+              </span>
+              <span className="inline-flex items-center rounded-full bg-black/[0.06] dark:bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-mono font-semibold text-muted-foreground">
                 v{pengaturan.versiAplikasi || "1.0.0"}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Visitor stats */}
-              <div className="flex items-center gap-2 text-[10px] text-emerald-200/70">
-                <span className="flex items-center gap-1">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
-                  </span>
-                  <span className="ml-0.5 font-semibold text-emerald-100">{visitorStats.online}</span> online
-                </span>
-                <span className="text-emerald-200/40">•</span>
-                <span>
-                  <span className="font-semibold text-emerald-100">{visitorStats.today}</span> hari ini
-                </span>
-                <span className="text-emerald-200/40">•</span>
-                <span>
-                  <span className="font-semibold text-emerald-100">{visitorStats.total}</span> total
-                </span>
-              </div>
-              <span className="text-emerald-200/40">|</span>
-              <p className="text-[10px] text-emerald-200/60">
-                Dashboard Monitoring Pengelolaan Keuangan Daerah
-              </p>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
+              </span>
+              <span className="font-semibold">{visitorStats.online}</span> online
+              <span className="text-muted-foreground/40">·</span>
+              <span><span className="font-semibold">{visitorStats.today}</span> today</span>
+              <span className="text-muted-foreground/40">·</span>
+              <span><span className="font-semibold">{visitorStats.total}</span> total</span>
             </div>
           </div>
         </footer>
@@ -515,15 +496,14 @@ function DashboardView({ data }: { data: DashboardData }) {
   // Quick navigation items — filtered by sidebar visibility and copilot config
   const copilotEnabled = pengaturan.copilotConfig?.enabled ?? true;
   const allQuickNavItems = [
-    { id: "ringkasan-eksekutif" as ActiveView, label: "Ringkasan Eksekutif", icon: BarChart3, color: "from-violet-500 to-purple-600", desc: "Executive Summary" },
-    { id: "analisis-risiko" as ActiveView, label: "Analisis Risiko", icon: AlertTriangle, color: "from-rose-500 to-red-600", desc: "Risk Analysis" },
-    { id: "copilot" as ActiveView, label: "AI Copilot", icon: BotMessageSquare, color: "from-amber-500 to-yellow-600", desc: "Tanya AI Keuangan" },
-    { id: "realisasi-skpd" as ActiveView, label: "Realisasi SKPD", icon: TrendingUp, color: "from-teal-500 to-cyan-600", desc: "Per-SKPD/OPD" },
+    { id: "ringkasan-eksekutif" as ActiveView, label: "Ringkasan Eksekutif", icon: BarChart3, color: "emerald", gradient: "from-emerald-500 to-emerald-600", desc: "Executive Summary" },
+    { id: "analisis-risiko" as ActiveView, label: "Analisis Risiko", icon: AlertTriangle, color: "rose", gradient: "from-rose-500 to-amber-500", desc: "Risk Analysis" },
+    { id: "transparansi" as ActiveView, label: "Transparansi", icon: Eye, color: "blue", gradient: "from-blue-500 to-blue-600", desc: "Data Transparency" },
+    { id: "admin" as ActiveView, label: "Admin", icon: Shield, color: "violet", gradient: "from-violet-500 to-purple-600", desc: "Administration" },
   ];
 
   const quickNavItems = allQuickNavItems.filter((item) => {
     if (isViewHiddenForUser(item.id)) return false;
-    if (item.id === "copilot" && !copilotEnabled) return false;
     return true;
   });
 
@@ -534,49 +514,14 @@ function DashboardView({ data }: { data: DashboardData }) {
       animate="visible"
       className="space-y-6"
     >
-      {/* ====== HERO BANNER - Modern Animated ====== */}
+      {/* ====== HERO BANNER - Clean Modern ====== */}
       <motion.div variants={itemVariants}>
-        <div
-          className="relative overflow-hidden rounded-2xl text-white p-8 lg:p-10"
-          style={{
-            background: `linear-gradient(135deg, ${pengaturan.warnaPrimary}, ${pengaturan.warnaSecondary}, ${pengaturan.warnaPrimary}dd)`,
-          }}
-        >
-          {/* Animated background orbs */}
-          <FloatingOrb
-            className="w-72 h-72 bg-white/5 animate-float-orb-slow"
-            style={{ top: '-60px', right: '-40px' }}
+        <div className="relative overflow-hidden rounded-2xl modern-border bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 p-8 lg:p-10">
+          {/* Subtle accent gradient blob - single decoration */}
+          <div
+            className="absolute -right-16 -top-16 w-56 h-56 rounded-full blur-3xl opacity-[0.07] pointer-events-none"
+            style={{ background: `radial-gradient(circle, ${pengaturan.warnaPrimary}, transparent 70%)` }}
           />
-          <FloatingOrb
-            className="w-48 h-48 bg-white/[0.07] animate-float-orb"
-            style={{ bottom: '-30px', left: '10%' }}
-          />
-          <FloatingOrb
-            className="w-32 h-32 bg-white/[0.04] animate-float-orb-fast"
-            style={{ top: '20%', right: '30%' }}
-          />
-          <FloatingOrb
-            className="w-24 h-24 bg-yellow-300/10 animate-float-orb-slow"
-            style={{ bottom: '10%', right: '15%' }}
-          />
-
-          {/* Decorative rotating ring */}
-          <div className="absolute -right-20 -top-20 w-60 h-60 border border-white/10 rounded-full animate-rotate-slow" />
-          <div className="absolute -right-10 -top-10 w-40 h-40 border border-white/[0.06] rounded-full animate-rotate-slow" style={{ animationDirection: 'reverse' }} />
-
-          {/* Decorative particles */}
-          {[...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-white/30 rounded-full animate-drift"
-              style={{
-                top: `${15 + i * 15}%`,
-                left: `${10 + i * 14}%`,
-                animationDelay: `${i * 1.3}s`,
-                animationDuration: `${6 + i * 1.5}s`,
-              }}
-            />
-          ))}
 
           {/* Content */}
           <div className="relative flex flex-col sm:flex-row items-center gap-6 flex-1 min-w-0">
@@ -587,7 +532,7 @@ function DashboardView({ data }: { data: DashboardData }) {
                 alt="Logo Kabupaten Seruyan"
                 width={80}
                 height={80}
-                className="w-20 h-20 relative z-10 object-contain drop-shadow-lg"
+                className="w-20 h-20 relative z-10 object-contain"
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
@@ -595,53 +540,38 @@ function DashboardView({ data }: { data: DashboardData }) {
             </div>
 
             <div className="text-center sm:text-left flex-1 min-w-0">
-              <motion.div
+              <motion.p
+                className="text-sm font-medium text-muted-foreground"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
               >
-                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                  <Sparkles className="w-4 h-4 text-yellow-300" />
-                  <span className="text-xs font-medium text-emerald-200 uppercase tracking-widest">
-                    Dashboard Keuangan Daerah
-                  </span>
-                  <Sparkles className="w-4 h-4 text-yellow-300" />
-                </div>
-              </motion.div>
+                Dashboard Keuangan Daerah
+              </motion.p>
 
               <motion.h2
-                className="text-xl lg:text-2xl font-extrabold tracking-wide leading-tight"
+                className="text-2xl font-bold tracking-tight modern-gradient-text mt-0.5"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4, duration: 0.5 }}
               >
-                Anggaran Pendapatan dan Belanja Daerah
+                {pengaturan.namaPemerintah}
               </motion.h2>
 
-              <motion.p
-                className="text-sm text-emerald-100 mt-2 font-medium"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-              >
-                {pengaturan.namaPemerintah} — Tahun Anggaran {data.tahun}
-              </motion.p>
-
               <motion.div
-                className="flex flex-wrap items-center justify-center sm:justify-start gap-4 mt-3"
+                className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3"
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
+                transition={{ delay: 0.5 }}
               >
-                <span className="flex items-center gap-1.5 text-xs text-emerald-200 bg-white/10 rounded-full px-3 py-1 backdrop-blur-sm">
-                  <Clock className="w-3.5 h-3.5" />
+                <span className="rounded-full px-3 py-1 text-xs font-medium" style={{ backgroundColor: `${pengaturan.warnaPrimary}15`, color: pengaturan.warnaPrimary }}>
                   TA {data.tahun}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-emerald-200 bg-white/10 rounded-full px-3 py-1 backdrop-blur-sm">
+                <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-700/50 px-3 py-1 text-xs font-medium text-muted-foreground">
                   <Info className="w-3.5 h-3.5" />
-                  Total APBD: {formatRupiahShort(data.ringkasan.totalAnggaran)}
+                  {formatRupiahShort(data.ringkasan.totalAnggaran)}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-emerald-200 bg-white/10 rounded-full px-3 py-1 backdrop-blur-sm">
+                <span className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-700/50 px-3 py-1 text-xs font-medium text-muted-foreground">
                   <Shield className="w-3.5 h-3.5" />
                   {pengaturan.namaInstansi}
                 </span>
@@ -653,10 +583,10 @@ function DashboardView({ data }: { data: DashboardData }) {
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('navigate-view', { detail: 'admin' }));
               }}
-              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-lg"
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700/60 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600/50 text-foreground text-sm font-medium transition-all duration-200"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.7, duration: 0.4, type: "spring", stiffness: 200 }}
+              transition={{ delay: 0.6, duration: 0.4, type: "spring", stiffness: 200 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -670,35 +600,40 @@ function DashboardView({ data }: { data: DashboardData }) {
       {/* ====== QUICK NAVIGATION CARDS ====== */}
       <motion.div variants={itemVariants}>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {quickNavItems.map((item, index) => (
-            <motion.button
-              key={item.id}
-              onClick={() => {
-                // We need a way to navigate - dispatch custom event
-                window.dispatchEvent(new CustomEvent('navigate-view', { detail: item.id }));
-              }}
-              className="group relative overflow-hidden rounded-xl p-4 text-left bg-card border border-border/50 shadow-sm hover:shadow-lg transition-all duration-300"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + index * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {/* Gradient accent bar */}
-              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${item.color} opacity-80 group-hover:opacity-100 transition-opacity`} />
+          {quickNavItems.map((item, index) => {
+            const colorMap: Record<string, { bg: string; border: string; iconBg: string }> = {
+              emerald: { bg: "bg-emerald-500/10", border: "border-l-emerald-500", iconBg: "bg-emerald-500" },
+              rose: { bg: "bg-rose-500/10", border: "border-l-rose-500", iconBg: "bg-rose-500" },
+              blue: { bg: "bg-blue-500/10", border: "border-l-blue-500", iconBg: "bg-blue-500" },
+              violet: { bg: "bg-violet-500/10", border: "border-l-violet-500", iconBg: "bg-violet-500" },
+            };
+            const colors = colorMap[item.color] || colorMap.emerald;
+            return (
+              <motion.button
+                key={item.id}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('navigate-view', { detail: item.id }));
+                }}
+                className={`group modern-card rounded-2xl p-4 cursor-pointer text-left border-l-4 ${colors.border}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 + index * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -2, scale: 1.01, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {/* Icon in colored container */}
+                <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center mb-2.5`}>
+                  <item.icon className={`w-4 h-4 ${colors.iconBg.replace('bg-', 'text-')}`} />
+                </div>
 
-              {/* Icon */}
-              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                <item.icon className="w-5 h-5 text-white" />
-              </div>
+                <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
 
-              <p className="text-sm font-bold text-foreground">{item.label}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
-
-              {/* Arrow indicator */}
-              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40 group-hover:text-foreground/60 group-hover:translate-x-1 transition-all duration-300" />
-            </motion.button>
-          ))}
+                {/* Arrow indicator */}
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30 group-hover:text-foreground/50 group-hover:translate-x-0.5 transition-all duration-300" />
+              </motion.button>
+            );
+          })}
         </div>
       </motion.div>
 

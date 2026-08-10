@@ -85,6 +85,18 @@ const menuItems = [
   },
 ];
 
+// Helper to convert hex to rgba
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Smooth cubic-bezier transition string
+const smoothTransition = "cubic-bezier(0.22, 1, 0.36, 1)";
+
 export default function Sidebar({
   activeView,
   onViewChange,
@@ -176,12 +188,22 @@ export default function Sidebar({
     }
   };
 
+  // Color helpers
+  const accentColor = pengaturan.warnaAccent;
+  const primaryColor = pengaturan.warnaPrimary;
+  const activeBg = hexToRgba(primaryColor, 0.08);
+  const activeChildBg = hexToRgba(primaryColor, 0.06);
+  const hoverBg = hexToRgba(primaryColor, 0.04);
+
+  // Whether labels are visible (expanded state)
+  const showLabels = !isDesktop || isHovered;
+
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && !isDesktop && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={onToggle}
         />
       )}
@@ -189,7 +211,7 @@ export default function Sidebar({
       {/* Desktop backdrop overlay when sidebar is expanded */}
       {isDesktop && isHovered && (
         <div
-          className="fixed inset-0 bg-black/15 z-40 transition-opacity duration-300"
+          className="fixed inset-0 bg-black/10 z-40 transition-opacity duration-300"
           onMouseEnter={handleMouseLeave}
         />
       )}
@@ -198,63 +220,82 @@ export default function Sidebar({
       <aside
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        style={{ backgroundColor: pengaturan.warnaPrimary }}
+        style={{
+          backgroundColor: primaryColor,
+          transitionTimingFunction: smoothTransition,
+        }}
         className={cn(
-          "fixed top-0 left-0 z-50 h-full text-white flex flex-col shadow-2xl",
-          "transition-all duration-300 ease-in-out",
+          "fixed top-0 left-0 z-50 h-full text-white flex flex-col",
+          "transition-all duration-300",
+          // Subtle shadow only when expanded
+          isExpanded ? "shadow-lg shadow-black/10" : "shadow-none",
           // Desktop: collapsed (w-[60px]) or expanded (w-64)
           isDesktop
             ? isHovered
               ? "w-64"
               : "w-[60px]"
-            : // Mobile: toggle-based
+            : // Mobile: toggle-based slide-in
               isOpen
-              ? "w-64 translate-x-0"
-              : "w-64 -translate-x-full"
+              ? "w-72 translate-x-0"
+              : "w-72 -translate-x-full"
         )}
       >
-        {/* Brand */}
+        {/* ====== Brand Section ====== */}
         <div
           className={cn(
-            "flex items-center border-b border-white/10 shrink-0 transition-all duration-300",
+            "flex items-center shrink-0",
+            "transition-all duration-300",
             isDesktop
               ? isHovered
-                ? "gap-3 px-4 py-4"
-                : "justify-center px-0 py-4"
-              : "gap-3 px-4 py-4"
+                ? "gap-3 px-4 py-5"
+                : "justify-center px-0 py-5"
+              : "gap-3 px-5 py-5"
           )}
         >
-          <img
-            src={logoSrc}
-            alt="Logo Kabupaten Seruyan"
-            className="w-10 h-10 object-contain bg-white p-0.5 shrink-0"
-          />
+          {/* Logo in rounded container */}
+          <div className="relative shrink-0">
+            <div
+              className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center p-1.5"
+              style={{ border: `1px solid rgba(255,255,255,0.12)` }}
+            >
+              <img
+                src={logoSrc}
+                alt="Logo Kabupaten Seruyan"
+                className="w-full h-full object-contain brightness-0 invert"
+              />
+            </div>
+          </div>
+
           {/* Text - visible when expanded */}
           <div
             className={cn(
               "flex-1 min-w-0 overflow-hidden transition-all duration-300",
-              isDesktop && !isHovered ? "w-0 opacity-0" : "w-auto opacity-100"
+              showLabels ? "w-auto opacity-100" : "w-0 opacity-0"
             )}
           >
-            <h1 className="text-sm font-bold tracking-wider uppercase truncate">
+            <h1 className="text-[15px] font-bold tracking-wide modern-gradient-text truncate">
               Dashboard
             </h1>
-            <p className="text-[10px] text-emerald-200 truncate">
+            <p className="text-[11px] text-white/45 font-medium truncate mt-0.5">
               Kab. Seruyan
             </p>
           </div>
+
           {/* Mobile close button */}
           {!isDesktop && (
             <button
               onClick={onToggle}
-              className="text-white/70 hover:text-white"
+              className="text-white/40 hover:text-white transition-colors duration-200 p-1 rounded-lg hover:bg-white/10"
             >
               <X className="w-5 h-5" />
             </button>
           )}
         </div>
 
-        {/* Navigation */}
+        {/* Separator line */}
+        <div className="mx-3 border-t border-white/[0.06]" />
+
+        {/* ====== Navigation ====== */}
         <nav className="flex-1 overflow-y-auto custom-scrollbar py-3">
           <ul className="space-y-0.5 px-2">
             {filteredMenuItems.map((item) => {
@@ -266,6 +307,7 @@ export default function Sidebar({
 
                 return (
                   <li key={item.id}>
+                    {/* Group header button */}
                     <button
                       onClick={() => {
                         if (isDesktop && !isHovered) {
@@ -274,45 +316,70 @@ export default function Sidebar({
                         toggleMenu(item.id);
                       }}
                       className={cn(
-                        "w-full flex items-center rounded-lg text-sm transition-all duration-200",
+                        "modern-sidebar-item w-full flex items-center rounded-xl text-[13px]",
+                        "transition-all duration-200",
                         isDesktop
                           ? isHovered
                             ? "gap-3 px-3 py-2.5"
                             : "justify-center px-0 py-2.5"
                           : "gap-3 px-3 py-2.5",
                         isChildActive
-                          ? "bg-white/15"
-                          : "text-emerald-100 hover:bg-white/10 hover:text-white"
+                          ? "modern-sidebar-item-active font-semibold"
+                          : "text-white/60 hover:text-white/90"
                       )}
-                      style={isChildActive ? { color: pengaturan.warnaAccent } : undefined}
+                      style={{
+                        ...(isChildActive
+                          ? {
+                              backgroundColor: activeBg,
+                              color: accentColor,
+                            }
+                          : { "--hover-bg": hoverBg } as React.CSSProperties),
+                        transitionTimingFunction: smoothTransition,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isChildActive) {
+                          e.currentTarget.style.backgroundColor = hoverBg;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isChildActive) {
+                          e.currentTarget.style.backgroundColor = "transparent";
+                        }
+                      }}
                       title={!isDesktop || isHovered ? undefined : item.label}
                     >
-                      <item.icon className="w-5 h-5 shrink-0" />
+                      {/* Accent bar for active group */}
+                      {isChildActive && showLabels && (
+                        <span
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] rounded-r-full"
+                          style={{ backgroundColor: accentColor }}
+                        />
+                      )}
+                      <item.icon className="w-5 h-5 shrink-0 ml-0" />
                       {/* Label - visible when expanded */}
                       <span
                         className={cn(
                           "flex-1 text-left font-medium overflow-hidden transition-all duration-300",
-                          isDesktop && !isHovered
-                            ? "w-0 opacity-0"
-                            : "w-auto opacity-100"
+                          showLabels ? "w-auto opacity-100" : "w-0 opacity-0"
                         )}
+                        style={{ transitionTimingFunction: smoothTransition }}
                       >
                         {item.label}
                       </span>
                       {/* Chevron - visible when expanded */}
                       <span
                         className={cn(
-                          "shrink-0 overflow-hidden transition-all duration-300",
-                          isDesktop && !isHovered
-                            ? "w-0 opacity-0"
-                            : "w-auto opacity-100"
+                          "shrink-0 overflow-hidden transition-all duration-200",
+                          showLabels ? "w-auto opacity-100" : "w-0 opacity-0"
                         )}
+                        style={{ transitionTimingFunction: smoothTransition }}
                       >
-                        {isExpandedMenu ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 text-white/40 transition-transform duration-200",
+                            isExpandedMenu ? "rotate-0" : "-rotate-90"
+                          )}
+                        />
                       </span>
                     </button>
 
@@ -320,33 +387,76 @@ export default function Sidebar({
                     <div
                       className={cn(
                         "overflow-hidden transition-all duration-300",
-                        isDesktop && !isHovered
-                          ? "max-h-0 opacity-0"
-                          : isExpandedMenu
+                        showLabels
+                          ? isExpandedMenu
                             ? "max-h-60 opacity-100"
                             : "max-h-0 opacity-0"
+                          : "max-h-0 opacity-0"
                       )}
+                      style={{ transitionTimingFunction: smoothTransition }}
                     >
-                      <ul className="pl-5 py-1 space-y-0.5">
-                        {item.children.map((child) => (
-                          <li key={child.id}>
-                            <button
-                              onClick={() =>
-                                handleViewChange(child.id as ActiveView)
-                              }
-                              className={cn(
-                                "w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs transition-all duration-200",
-                                activeView === child.id
-                                  ? "font-semibold"
-                                  : "text-emerald-200 hover:bg-white/10 hover:text-white"
-                              )}
-                              style={activeView === child.id ? { backgroundColor: `${pengaturan.warnaAccent}33`, color: pengaturan.warnaAccent } : undefined}
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-                              {child.label}
-                            </button>
-                          </li>
-                        ))}
+                      <ul className="modern-sidebar-connector pl-5 py-1 space-y-0.5">
+                        {item.children.map((child) => {
+                          const isChildItemActive = activeView === child.id;
+                          return (
+                            <li key={child.id}>
+                              <button
+                                onClick={() =>
+                                  handleViewChange(child.id as ActiveView)
+                                }
+                                className={cn(
+                                  "modern-sidebar-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs",
+                                  "transition-all duration-200",
+                                  isChildItemActive
+                                    ? "modern-sidebar-item-active font-semibold"
+                                    : "text-white/45 hover:text-white/80"
+                                )}
+                                style={{
+                                  ...(isChildItemActive
+                                    ? {
+                                        backgroundColor: activeChildBg,
+                                        color: accentColor,
+                                      }
+                                    : {}),
+                                  transitionTimingFunction: smoothTransition,
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isChildItemActive) {
+                                    e.currentTarget.style.backgroundColor = hoverBg;
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isChildItemActive) {
+                                    e.currentTarget.style.backgroundColor = "transparent";
+                                  }
+                                }}
+                              >
+                                {/* Accent bar for active child */}
+                                {isChildItemActive && (
+                                  <span
+                                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-[50%] rounded-r-full"
+                                    style={{ backgroundColor: accentColor }}
+                                  />
+                                )}
+                                {/* Dot indicator */}
+                                <span
+                                  className={cn(
+                                    "w-1 h-1 rounded-full shrink-0",
+                                    isChildItemActive
+                                      ? ""
+                                      : "bg-white/25"
+                                  )}
+                                  style={
+                                    isChildItemActive
+                                      ? { backgroundColor: accentColor }
+                                      : undefined
+                                  }
+                                />
+                                {child.label}
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   </li>
@@ -360,28 +470,53 @@ export default function Sidebar({
                   <button
                     onClick={() => handleViewChange(item.id as ActiveView)}
                     className={cn(
-                      "w-full flex items-center rounded-lg text-sm transition-all duration-200",
+                      "modern-sidebar-item w-full flex items-center rounded-xl text-[13px]",
+                      "transition-all duration-200",
                       isDesktop
                         ? isHovered
                           ? "gap-3 px-3 py-2.5"
                           : "justify-center px-0 py-2.5"
                         : "gap-3 px-3 py-2.5",
                       isActive
-                        ? "font-semibold"
-                        : "text-emerald-100 hover:bg-white/10 hover:text-white"
+                        ? "modern-sidebar-item-active font-semibold"
+                        : "text-white/60 hover:text-white/90"
                     )}
-                    style={isActive ? { backgroundColor: `${pengaturan.warnaAccent}33`, color: pengaturan.warnaAccent } : undefined}
+                    style={{
+                      ...(isActive
+                        ? {
+                            backgroundColor: activeBg,
+                            color: accentColor,
+                          }
+                        : {}),
+                      transitionTimingFunction: smoothTransition,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.backgroundColor = hoverBg;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
                     title={!isDesktop || isHovered ? undefined : item.label}
                   >
-                    <item.icon className="w-5 h-5 shrink-0" />
+                    {/* Left accent bar for active item */}
+                    {isActive && showLabels && (
+                      <span
+                        className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] rounded-r-full"
+                        style={{ backgroundColor: accentColor }}
+                      />
+                    )}
+                    <item.icon className="w-5 h-5 shrink-0 ml-0" />
                     {/* Label - visible when expanded */}
                     <span
                       className={cn(
                         "font-medium overflow-hidden transition-all duration-300",
-                        isDesktop && !isHovered
-                          ? "w-0 opacity-0"
-                          : "w-auto opacity-100"
+                        showLabels ? "w-auto opacity-100" : "w-0 opacity-0"
                       )}
+                      style={{ transitionTimingFunction: smoothTransition }}
                     >
                       {item.label}
                     </span>
@@ -392,32 +527,35 @@ export default function Sidebar({
           </ul>
         </nav>
 
-        {/* Footer */}
+        {/* Separator line */}
+        <div className="mx-3 border-t border-white/[0.06]" />
+
+        {/* ====== Footer ====== */}
         <div
           className={cn(
-            "border-t border-white/10 shrink-0 transition-all duration-300 overflow-hidden",
+            "shrink-0 transition-all duration-300 overflow-hidden",
             isDesktop
               ? isHovered
                 ? "px-4 py-3"
                 : "px-0 py-3"
-              : "px-4 py-3"
+              : "px-5 py-3"
           )}
         >
           <p
             className={cn(
-              "text-[10px] text-emerald-300/60 text-center transition-all duration-300",
-              isDesktop && !isHovered ? "opacity-0 h-0" : "opacity-100 h-auto"
+              "text-[10px] text-white/30 text-center transition-all duration-300",
+              showLabels ? "opacity-100 h-auto" : "opacity-0 h-0"
             )}
           >
             {pengaturan.namaInstansi}
           </p>
           <p
             className={cn(
-              "text-[9px] text-emerald-300/40 text-center transition-all duration-300",
-              isDesktop && !isHovered ? "opacity-0 h-0" : "opacity-100 h-auto"
+              "text-[9px] text-white/20 text-center transition-all duration-300",
+              showLabels ? "opacity-100 h-auto" : "opacity-0 h-0"
             )}
           >
-            © 2024 All Rights Reserved
+            v2.0 · © 2024
           </p>
         </div>
       </aside>

@@ -95,10 +95,8 @@ export default function MobileBottomNav({
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 lg:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-black/[0.06] dark:border-white/[0.06]"
       style={{
-        backgroundColor: pengaturan.warnaDark,
-        borderTop: `2px solid ${pengaturan.warnaAccent}40`,
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
@@ -114,8 +112,8 @@ export default function MobileBottomNav({
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200",
                 isActive
-                  ? "text-white"
-                  : "text-white/50 active:text-white/80 active:scale-95"
+                  ? "text-foreground"
+                  : "text-muted-foreground/60 active:text-foreground active:scale-95"
               )}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
@@ -124,8 +122,8 @@ export default function MobileBottomNav({
               {isActive && (
                 <motion.div
                   layoutId="mobileNavIndicator"
-                  className="absolute -top-[2px] left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full"
-                  style={{ backgroundColor: pengaturan.warnaAccent }}
+                  className="absolute -top-px left-1/2 -translate-x-1/2 h-[3px] w-8 rounded-full"
+                  style={{ background: `linear-gradient(90deg, ${pengaturan.warnaPrimary}, ${pengaturan.warnaAccent})` }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
@@ -148,14 +146,7 @@ export default function MobileBottomNav({
               </span>
 
               {/* Active dot */}
-              {isActive && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -bottom-0.5 w-1 h-1 rounded-full"
-                  style={{ backgroundColor: pengaturan.warnaAccent }}
-                />
-              )}
+              {/* Active dot removed for cleaner look */}
             </button>
           );
         })}
@@ -166,8 +157,8 @@ export default function MobileBottomNav({
           className={cn(
             "flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200",
             activeView === "admin" || !visibleItems.some((item) => item.id === activeNavId)
-              ? "text-white"
-              : "text-white/50 active:text-white/80 active:scale-95"
+              ? "text-foreground"
+              : "text-muted-foreground/60 active:text-foreground active:scale-95"
           )}
           aria-label="Menu lainnya"
         >
@@ -176,8 +167,8 @@ export default function MobileBottomNav({
             activeView !== "dashboard" && (
               <motion.div
                 layoutId="mobileNavIndicator"
-                className="absolute -top-[2px] left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full"
-                style={{ backgroundColor: pengaturan.warnaAccent }}
+                className="absolute -top-px left-1/2 -translate-x-1/2 h-[3px] w-8 rounded-full"
+                style={{ background: `linear-gradient(90deg, ${pengaturan.warnaPrimary}, ${pengaturan.warnaAccent})` }}
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
             )}

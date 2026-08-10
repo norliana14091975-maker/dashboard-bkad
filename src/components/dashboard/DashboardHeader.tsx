@@ -1,7 +1,7 @@
 "use client";
 
 import { TahunAnggaranItem, ActiveView } from "./types";
-import { Menu, Calendar, LogOut, User, ChevronDown, Check, RefreshCw, Clock, Settings2, Users } from "lucide-react";
+import { Menu, Calendar, LogOut, ChevronDown, Check, RefreshCw, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -25,7 +25,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 type DashboardHeaderProps = {
   activeView: ActiveView;
@@ -106,52 +106,47 @@ export default function DashboardHeader({
   const isAutoRefreshActive = autoRefreshInterval > 0;
 
   return (
-    <header
-      className="sticky top-0 z-30 text-white shadow-lg animate-gradient"
-      style={{
-        background: `linear-gradient(to right, ${pengaturan.warnaPrimary}, ${pengaturan.warnaSecondary}, ${pengaturan.warnaPrimary})`,
-      }}
-    >
-      <div className="flex items-center justify-between px-4 lg:px-6 py-3">
-        {/* Left: Menu + Logo + Title */}
+    <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-black/[0.06] dark:border-white/[0.06]">
+      {/* Thin accent line at top */}
+      <div
+        className="h-[2px] w-full"
+        style={{
+          background: `linear-gradient(to right, ${pengaturan.warnaPrimary}, ${pengaturan.warnaAccent})`,
+        }}
+      />
+
+      <div className="flex items-center justify-between px-4 lg:px-6 h-14">
+        {/* Left: Hamburger (mobile) + View Title + Gov Name */}
         <div className="flex items-center gap-3">
+          {/* Hamburger — mobile only */}
           <button
             onClick={onMenuToggle}
-            className="lg:hidden p-1.5 rounded-md hover:bg-white/10 transition-colors"
+            className="lg:hidden p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-foreground"
             aria-label="Toggle menu"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          <img
-            src={logoSrc}
-            alt="Logo Kabupaten Seruyan"
-            width={36}
-            height={36}
-            className="w-9 h-9 object-contain hidden sm:block"
-          />
-
-          <div className="flex flex-col">
-            <h1 className="text-base lg:text-lg font-bold tracking-wide uppercase">
+          <div className="flex flex-col leading-tight">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
               {viewLabels[activeView]}
             </h1>
-            <p className="text-[10px] lg:text-xs text-emerald-200 hidden sm:block">
+            <p className="text-sm text-muted-foreground hidden sm:block">
               {pengaturan.namaPemerintah}
             </p>
           </div>
         </div>
 
-        {/* Right: Visitor Count + Auto-Refresh + Year Selector + User Menu */}
+        {/* Right: Visitor Pill + Auto-Refresh + Year Selector + User Menu */}
         <div className="flex items-center gap-2">
-          {/* ─── Visitor Count Badge ─── */}
-          <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium">
+          {/* ─── Visitor Count Pill ─── */}
+          <div className="flex items-center gap-1.5 bg-black/[0.04] dark:bg-white/[0.08] rounded-full px-3 py-1 text-xs font-medium text-foreground">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
             </span>
-            <Users className="w-3.5 h-3.5 hidden sm:inline" />
             <span className="font-semibold">{visitorOnline}</span>
-            <span className="hidden sm:inline text-emerald-200/70">online</span>
+            <span className="hidden sm:inline text-muted-foreground">online</span>
           </div>
 
           {/* ─── Auto-Refresh Indicator ─── */}
@@ -159,18 +154,14 @@ export default function DashboardHeader({
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all"
+                  className="flex items-center gap-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] rounded-lg p-2 text-xs font-medium text-foreground transition-colors"
                   aria-label="Auto-refresh settings"
                 >
                   <RefreshCw
-                    className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+                    className={`w-4 h-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`}
                   />
-                  <span className="hidden sm:inline">
+                  <span className="hidden sm:inline text-muted-foreground">
                     {nextRefreshIn > 0 ? formatCountdown(nextRefreshIn) : "Refresh..."}
-                  </span>
-                  {/* Progress ring for mobile */}
-                  <span className="sm:hidden">
-                    {nextRefreshIn > 0 ? formatCountdown(nextRefreshIn) : "↻"}
                   </span>
                 </button>
               </PopoverTrigger>
@@ -241,23 +232,23 @@ export default function DashboardHeader({
             <button
               onClick={onManualRefresh}
               disabled={isRefreshing}
-              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] rounded-lg p-2 text-xs font-medium text-foreground transition-colors disabled:opacity-50"
               aria-label="Refresh data"
               title="Refresh data dashboard"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">{isRefreshing ? "Memuat..." : "Refresh"}</span>
+              <RefreshCw className={`w-4 h-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline text-muted-foreground">{isRefreshing ? "Memuat..." : "Refresh"}</span>
             </button>
           )}
 
           {/* ─── Year Selector ─── */}
-          <div className="flex items-center gap-2 bg-white/10 rounded-lg px-3 py-1.5">
-            <Calendar className="w-4 h-4" style={{ color: pengaturan.warnaAccent }} />
+          <div className="flex items-center gap-1.5 bg-black/[0.04] dark:bg-white/[0.08] rounded-lg px-2.5 py-1.5">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
             <Select
               value={tahun.toString()}
               onValueChange={(val) => onTahunChange(parseInt(val))}
             >
-              <SelectTrigger className="border-0 bg-transparent text-white text-sm font-semibold h-6 w-auto p-0 focus:ring-0 [&>svg]:text-[var(--gov-accent)]">
+              <SelectTrigger className="border-0 bg-transparent text-foreground text-sm font-semibold h-6 w-auto p-0 focus:ring-0 [&>svg]:text-muted-foreground">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -282,10 +273,7 @@ export default function DashboardHeader({
           {isAuthenticated && user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 h-9 px-2 hover:bg-white/10 text-white"
-                >
+                <button className="flex items-center gap-2 h-9 px-2 rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors">
                   <Avatar className="w-7 h-7" style={{ backgroundColor: pengaturan.warnaAccent }}>
                     <AvatarFallback
                       className="text-xs font-bold"
@@ -294,11 +282,11 @@ export default function DashboardHeader({
                       {userInitials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden sm:inline text-sm font-medium max-w-[120px] truncate">
+                  <span className="hidden sm:inline text-sm font-medium text-foreground max-w-[120px] truncate">
                     {user.name}
                   </span>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-                </Button>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
@@ -328,24 +316,6 @@ export default function DashboardHeader({
             </DropdownMenu>
           )}
         </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="px-4 lg:px-6 pb-2 flex items-center gap-1 text-xs text-emerald-200/70">
-        <button
-          onClick={onNavigateDashboard}
-          className="hover:text-white transition-colors"
-        >
-          Dashboard
-        </button>
-        {activeView !== "dashboard" && (
-          <>
-            <span>/</span>
-            <span className="font-medium" style={{ color: pengaturan.warnaAccent }}>
-              {viewLabels[activeView]}
-            </span>
-          </>
-        )}
       </div>
     </header>
   );
