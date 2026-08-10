@@ -22,8 +22,10 @@ import {
   ArrowRight,
   Loader2,
   FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import ImportDialog from "./ImportDialog";
+import PdfImportDialog from "./PdfImportDialog";
 import CurrencyInput from "./CurrencyInput";
 import {
   Dialog,
@@ -107,6 +109,7 @@ export default function PembiayaanManager({
 
   // Import dialog state
   const [importOpen, setImportOpen] = useState(false);
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
 
   // Update realisasi dialog state
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -493,15 +496,26 @@ export default function PembiayaanManager({
         <CardTitle className="text-lg flex items-center gap-2">
           <div className="w-2 h-6 rounded-full bg-amber-600" />
           Manajemen Pembiayaan
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setImportOpen(true)}
-            className="ml-auto gap-1.5 text-xs"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            Import Excel
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPdfImportOpen(true)}
+              className="gap-1.5 text-xs"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Import PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+              className="gap-1.5 text-xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Import Excel
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -809,6 +823,15 @@ export default function PembiayaanManager({
         <ImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
+          jenis="pembiayaan"
+          tahunAnggaranId={tahunAnggaranId}
+          onSuccess={fetchData}
+        />
+
+        {/* PDF Import Dialog */}
+        <PdfImportDialog
+          open={pdfImportOpen}
+          onOpenChange={setPdfImportOpen}
           jenis="pembiayaan"
           tahunAnggaranId={tahunAnggaranId}
           onSuccess={fetchData}

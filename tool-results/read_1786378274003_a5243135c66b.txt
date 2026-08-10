@@ -1,0 +1,754 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useCallback } from "react";
+     4→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+     5→import { Badge } from "@/components/ui/badge";
+     6→import { Button } from "@/components/ui/button";
+     7→import { Input } from "@/components/ui/input";
+     8→import { Label } from "@/components/ui/label";
+     9→import { Textarea } from "@/components/ui/textarea";
+    10→import { useToast } from "@/hooks/use-toast";
+    11→import GenericCrudTable, { type ColumnDef, type RowAction } from "./GenericCrudTable";
+    12→import DataFormDialog, { type FormField } from "./DataFormDialog";
+    13→import DeleteConfirmDialog from "./DeleteConfirmDialog";
+    14→import { safePercentage } from "@/components/dashboard/types";
+    15→import RupiahCell from "@/components/dashboard/RupiahCell";
+    16→import {
+    17→  PencilLine,
+    18→  History,
+    19→  CalendarClock,
+    20→  TrendingUp,
+    21→  TrendingDown,
+    22→  ArrowRight,
+    23→  Loader2,
+    24→  FileSpreadsheet,
+    25→} from "lucide-react";
+    26→import ImportDialog from "./ImportDialog";
+    27→import CurrencyInput from "./CurrencyInput";
+    28→import { usePengaturan } from "@/context/PengaturanContext";
+    29→import {
+    30→  Dialog,
+    31→  DialogContent,
+    32→  DialogDescription,
+    33→  DialogFooter,
+    34→  DialogHeader,
+    35→  DialogTitle,
+    36→} from "@/components/ui/dialog";
+    37→
+    38→type Pendapatan = {
+    39→  id: string;
+    40→  tahunAnggaranId: string;
+    41→  kodeAkun: string;
+    42→  namaAkun: string;
+    43→  kategori: string;
+    44→  anggaran: number;
+    45→  realisasi: number;
+    46→  opdId: string | null;
+    47→  tanggalUpdate?: string;
+    48→  sourceIds?: string[];
+    49→  count?: number;
+    50→};
+    51→
+    52→type HistoryRecord = {
+    53→  id: string;
+    54→  pendapatanId: string;
+    55→  realisasiLama: number;
+    56→  realisasiBaru: number;
+    57→  tanggalUpdate: string;
+    58→  keterangan: string | null;
+    59→  updatedBy: string | null;
+    60→  createdAt: string;
+    61→};
+    62→
+    63→type Pagination = {
+    64→  page: number;
+    65→  limit: number;
+    66→  total: number;
+    67→  totalPages: number;
+    68→};
+    69→
+    70→const COLUMNS: ColumnDef[] = [
+    71→  { key: "kodeAkun", label: "Kode Akun", type: "text", width: "120px" },
+    72→  { key: "namaAkun", label: "Nama Akun", type: "text", wrap: true },
+    73→  { key: "kategori", label: "Kategori", type: "text", width: "120px" },
+    74→  { key: "anggaran", label: "Anggaran", type: "currency", width: "180px" },
+    75→  { key: "realisasi", label: "Realisasi", type: "currency", width: "180px" },
+    76→  { key: "tanggalUpdate", label: "Tgl Update", type: "date", width: "120px" },
+    77→  { key: "count", label: "Jumlah Sumber", type: "custom", width: "110px" },
+    78→];
+    79→
+    80→interface PendapatanManagerProps {
+    81→  tahunAnggaranId: string | null;
+    82→}
+    83→
+    84→export default function PendapatanManager({
+    85→  tahunAnggaranId,
+    86→}: PendapatanManagerProps) {
+    87→  const { toast } = useToast();
+    88→  const { pengaturan } = usePengaturan();
+    89→  const [data, setData] = useState<Pendapatan[]>([]);
+    90→  const [loading, setLoading] = useState(false);
+    91→  const [search, setSearch] = useState("");
+    92→  const [kategoriOptions, setKategoriOptions] = useState<{ value: string; label: string }[]>([]);
+    93→  const [kategoriData, setKategoriData] = useState<Array<{ id: string; namaKategori: string; kodeKategori: string | null; aktif: boolean }>>([]);
+    94→  const [pagination, setPagination] = useState<Pagination>({
+    95→    page: 1,
+    96→    limit: 20,
+    97→    total: 0,
+    98→    totalPages: 0,
+    99→  });
+   100→  const [formOpen, setFormOpen] = useState(false);
+   101→  const [deleteOpen, setDeleteOpen] = useState(false);
+   102→  const [editingItem, setEditingItem] = useState<Pendapatan | null>(null);
+   103→  const [deletingItem, setDeletingItem] = useState<Pendapatan | null>(null);
+   104→  const [submitting, setSubmitting] = useState(false);
+   105→  const [formKey, setFormKey] = useState(0);
+   106→
+   107→  // Import dialog state
+   108→  const [importOpen, setImportOpen] = useState(false);
+   109→
+   110→  // Update realisasi dialog state
+   111→  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+   112→  const [updateItem, setUpdateItem] = useState<Pendapatan | null>(null);
+   113→  const [updateRealisasiNumber, setUpdateRealisasiNumber] = useState(0);
+   114→  const [updateTanggal, setUpdateTanggal] = useState("");
+   115→  const [updateKeterangan, setUpdateKeterangan] = useState("");
+   116→  const [updateSubmitting, setUpdateSubmitting] = useState(false);
+   117→
+   118→  // History dialog state
+   119→  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+   120→  const [historyItem, setHistoryItem] = useState<Pendapatan | null>(null);
+   121→  const [historyData, setHistoryData] = useState<HistoryRecord[]>([]);
+   122→  const [historyLoading, setHistoryLoading] = useState(false);
+   123→
+   124→  // Fetch categories from Kategori API
+   125→  const fetchKategoriOptions = useCallback(async () => {
+   126→    try {
+   127→      const res = await fetch("/api/admin/kategori?jenis=Pendapatan");
+   128→      if (!res.ok) throw new Error("Gagal memuat kategori");
+   129→      const json = await res.json();
+   130→      const kategoris: Array<{ id: string; namaKategori: string; kodeKategori: string | null; aktif: boolean }> = json.data || [];
+   131→      // Store full kategori data for auto-fill
+   132→      setKategoriData(kategoris.filter((k) => k.aktif));
+   133→      // Only show active categories
+   134→      const activeKategoris = kategoris.filter((k) => k.aktif);
+   135→      setKategoriOptions(
+   136→        activeKategoris.length > 0
+   137→          ? activeKategoris.map((k) => ({ value: k.namaKategori, label: k.namaKategori }))
+   138→          : [
+   139→              { value: "PAD", label: "PAD" },
+   140→              { value: "Transfer", label: "Transfer" },
+   141→              { value: "Lainnya", label: "Lainnya" },
+   142→            ]
+   143→      );
+   144→    } catch {
+   145→      // Fallback to default options
+   146→      setKategoriData([]);
+   147→      setKategoriOptions([
+   148→        { value: "PAD", label: "PAD" },
+   149→        { value: "Transfer", label: "Transfer" },
+   150→        { value: "Lainnya", label: "Lainnya" },
+   151→      ]);
+   152→    }
+   153→  }, []);
+   154→
+   155→  const FORM_FIELDS: FormField[] = [
+   156→    {
+   157→      name: "kategori",
+   158→      label: "Kategori",
+   159→      type: "select",
+   160→      required: true,
+   161→      options: kategoriOptions,
+   162→      onSelect: (selectedValue, setFormData) => {
+   163→        const selected = kategoriData.find((k) => k.namaKategori === selectedValue);
+   164→        if (selected) {
+   165→          setFormData((prev) => ({
+   166→            ...prev,
+   167→            kodeAkun: selected.kodeKategori || prev.kodeAkun,
+   168→            namaAkun: selected.namaKategori || prev.namaAkun,
+   169→          }));
+   170→        }
+   171→      },
+   172→    },
+   173→    {
+   174→      name: "kodeAkun",
+   175→      label: "Kode Akun",
+   176→      type: "text",
+   177→      placeholder: "Contoh: 1.01",
+   178→      required: true,
+   179→    },
+   180→    {
+   181→      name: "namaAkun",
+   182→      label: "Nama Akun",
+   183→      type: "text",
+   184→      placeholder: "Contoh: PAD",
+   185→      required: true,
+   186→    },
+   187→    {
+   188→      name: "anggaran",
+   189→      label: "Anggaran (Rp)",
+   190→      type: "currency",
+   191→      placeholder: "Contoh: 31.500.000.000,50",
+   192→      required: true,
+   193→      min: 0,
+   194→    },
+   195→    {
+   196→      name: "realisasi",
+   197→      label: "Realisasi (Rp)",
+   198→      type: "currency",
+   199→      placeholder: "Contoh: 28.000.000.000,50",
+   200→      required: true,
+   201→      min: 0,
+   202→    },
+   203→  ];
+   204→
+   205→  const fetchData = useCallback(async () => {
+   206→    if (!tahunAnggaranId) {
+   207→      setData([]);
+   208→      return;
+   209→    }
+   210→    setLoading(true);
+   211→    try {
+   212→      const params = new URLSearchParams({
+   213→        tahunAnggaranId,
+   214→        search,
+   215→        page: String(pagination.page),
+   216→        limit: String(pagination.limit),
+   217→        grouped: 'true',
+   218→      });
+   219→      const res = await fetch(`/api/admin/pendapatan?${params}`);
+   220→      if (!res.ok) throw new Error("Gagal memuat data pendapatan");
+   221→      const json = await res.json();
+   222→      setData(json.data || []);
+   223→      if (json.pagination) {
+   224→        setPagination(json.pagination);
+   225→      }
+   226→    } catch (err) {
+   227→      toast({
+   228→        title: "Error",
+   229→        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+   230→        variant: "destructive",
+   231→      });
+   232→    } finally {
+   233→      setLoading(false);
+   234→    }
+   235→  }, [tahunAnggaranId, search, pagination.page, pagination.limit, toast]);
+   236→
+   237→  useEffect(() => {
+   238→    fetchData();
+   239→  }, [fetchData]);
+   240→
+   241→  useEffect(() => {
+   242→    fetchKategoriOptions();
+   243→  }, [fetchKategoriOptions]);
+   244→
+   245→  // Refresh categories when form opens
+   246→  const handleCreate = () => {
+   247→    setEditingItem(null);
+   248→    setFormKey((k) => k + 1);
+   249→    fetchKategoriOptions();
+   250→    setFormOpen(true);
+   251→  };
+   252→
+   253→  const handleEdit = (row: Record<string, unknown>) => {
+   254→    setEditingItem(row as unknown as Pendapatan);
+   255→    setFormKey((k) => k + 1);
+   256→    fetchKategoriOptions();
+   257→    setFormOpen(true);
+   258→  };
+   259→
+   260→  const handleDelete = (row: Record<string, unknown>) => {
+   261→    setDeletingItem(row as unknown as Pendapatan);
+   262→    setDeleteOpen(true);
+   263→  };
+   264→
+   265→  // ---- Update Realisasi ----
+   266→  const handleOpenUpdateDialog = (row: Record<string, unknown>) => {
+   267→    const item = row as unknown as Pendapatan;
+   268→    setUpdateItem(item);
+   269→    setUpdateRealisasiNumber(item.realisasi ?? 0);
+   270→    // Set tanggal to today by default
+   271→    const today = new Date().toISOString().split("T")[0];
+   272→    setUpdateTanggal(today);
+   273→    setUpdateKeterangan("");
+   274→    setUpdateDialogOpen(true);
+   275→  };
+   276→
+   277→  const handleSubmitUpdate = async () => {
+   278→    if (!updateItem) return;
+   279→    const realisasiValue = updateRealisasiNumber;
+   280→    if (isNaN(realisasiValue) || realisasiValue < 0) {
+   281→      toast({
+   282→        title: "Validasi",
+   283→        description: "Nilai realisasi harus berupa angka positif",
+   284→        variant: "destructive",
+   285→      });
+   286→      return;
+   287→    }
+   288→    if (!updateTanggal) {
+   289→      toast({
+   290→        title: "Validasi",
+   291→        description: "Tanggal update harus diisi",
+   292→        variant: "destructive",
+   293→      });
+   294→      return;
+   295→    }
+   296→
+   297→    setUpdateSubmitting(true);
+   298→    try {
+   299→      const patchBody: Record<string, unknown> = {
+   300→        realisasi: realisasiValue,
+   301→        tanggalUpdate: new Date(updateTanggal).toISOString(),
+   302→        keterangan: updateKeterangan || undefined,
+   303→      };
+   304→      if (updateItem.sourceIds && updateItem.sourceIds.length > 0) {
+   305→        patchBody.sourceIds = updateItem.sourceIds;
+   306→      }
+   307→      const res = await fetch(`/api/admin/pendapatan?id=${updateItem.id}`, {
+   308→        method: "PATCH",
+   309→        headers: { "Content-Type": "application/json" },
+   310→        body: JSON.stringify(patchBody),
+   311→      });
+   312→      if (!res.ok) {
+   313→        const errJson = await res.json().catch(() => ({}));
+   314→        throw new Error(errJson.error || "Gagal mengupdate realisasi");
+   315→      }
+   316→      toast({
+   317→        title: "Berhasil",
+   318→        description: `Realisasi ${updateItem.kodeAkun} — ${updateItem.namaAkun} berhasil diperbarui`,
+   319→      });
+   320→      setUpdateDialogOpen(false);
+   321→      fetchData();
+   322→    } catch (err) {
+   323→      toast({
+   324→        title: "Error",
+   325→        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+   326→        variant: "destructive",
+   327→      });
+   328→    } finally {
+   329→      setUpdateSubmitting(false);
+   330→    }
+   331→  };
+   332→
+   333→  // ---- History ----
+   334→  const handleOpenHistory = async (row: Record<string, unknown>) => {
+   335→    const item = row as unknown as Pendapatan;
+   336→    setHistoryItem(item);
+   337→    setHistoryDialogOpen(true);
+   338→    setHistoryLoading(true);
+   339→    try {
+   340→      const res = await fetch(`/api/admin/pendapatan-history?pendapatanId=${item.id}`);
+   341→      if (!res.ok) throw new Error("Gagal memuat riwayat");
+   342→      const json = await res.json();
+   343→      setHistoryData(json.data || []);
+   344→    } catch (err) {
+   345→      toast({
+   346→        title: "Error",
+   347→        description: err instanceof Error ? err.message : "Gagal memuat riwayat",
+   348→        variant: "destructive",
+   349→      });
+   350→      setHistoryData([]);
+   351→    } finally {
+   352→      setHistoryLoading(false);
+   353→    }
+   354→  };
+   355→
+   356→  // Format date for display
+   357→  const formatDate = (dateStr: string) => {
+   358→    try {
+   359→      const d = new Date(dateStr);
+   360→      return d.toLocaleDateString("id-ID", {
+   361→        day: "2-digit",
+   362→        month: "long",
+   363→        year: "numeric",
+   364→        hour: "2-digit",
+   365→        minute: "2-digit",
+   366→      });
+   367→    } catch {
+   368→      return dateStr;
+   369→    }
+   370→  };
+   371→
+   372→  // Calculate difference
+   373→  const calcDifference = (baru: number, lama: number) => {
+   374→    const diff = baru - lama;
+   375→    return diff;
+   376→  };
+   377→
+   378→  // Row actions for the table
+   379→  const rowActions: RowAction[] = [
+   380→    {
+   381→      key: "update-realisasi",
+   382→      label: "Update Realisasi",
+   383→      icon: PencilLine,
+   384→      className: "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50",
+   385→      onClick: handleOpenUpdateDialog,
+   386→    },
+   387→    {
+   388→      key: "history",
+   389→      label: "Riwayat Realisasi",
+   390→      icon: History,
+   391→      className: "text-amber-600 hover:text-amber-800 hover:bg-amber-50",
+   392→      onClick: handleOpenHistory,
+   393→    },
+   394→  ];
+   395→
+   396→  const handleSubmit = async (formData: Record<string, unknown>) => {
+   397→    if (!tahunAnggaranId) return;
+   398→    setSubmitting(true);
+   399→    try {
+   400→      const body: Record<string, unknown> = {
+   401→        tahunAnggaranId,
+   402→        kodeAkun: String(formData.kodeAkun),
+   403→        namaAkun: String(formData.namaAkun),
+   404→        kategori: String(formData.kategori),
+   405→        anggaran: Number(formData.anggaran),
+   406→        realisasi: Number(formData.realisasi),
+   407→      };
+   408→
+   409→      let res: Response;
+   410→      if (editingItem) {
+   411→        if (editingItem.sourceIds && editingItem.sourceIds.length > 0) {
+   412→          body.sourceIds = editingItem.sourceIds;
+   413→        }
+   414→        res = await fetch(`/api/admin/pendapatan?id=${editingItem.id}`, {
+   415→          method: "PUT",
+   416→          headers: { "Content-Type": "application/json" },
+   417→          body: JSON.stringify(body),
+   418→        });
+   419→      } else {
+   420→        res = await fetch("/api/admin/pendapatan", {
+   421→          method: "POST",
+   422→          headers: { "Content-Type": "application/json" },
+   423→          body: JSON.stringify(body),
+   424→        });
+   425→      }
+   426→      if (!res.ok) {
+   427→        const errJson = await res.json().catch(() => ({}));
+   428→        throw new Error(errJson.error || "Gagal menyimpan data");
+   429→      }
+   430→      toast({
+   431→        title: "Berhasil",
+   432→        description: editingItem
+   433→          ? "Data pendapatan berhasil diperbarui"
+   434→          : "Data pendapatan berhasil ditambahkan",
+   435→      });
+   436→      setFormOpen(false);
+   437→      fetchData();
+   438→    } catch (err) {
+   439→      toast({
+   440→        title: "Error",
+   441→        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+   442→        variant: "destructive",
+   443→      });
+   444→    } finally {
+   445→      setSubmitting(false);
+   446→    }
+   447→  };
+   448→
+   449→  const handleConfirmDelete = async () => {
+   450→    if (!deletingItem) return;
+   451→    setSubmitting(true);
+   452→    try {
+   453→      const deleteBody: Record<string, unknown> = {};
+   454→      if (deletingItem.sourceIds && deletingItem.sourceIds.length > 0) {
+   455→        deleteBody.sourceIds = deletingItem.sourceIds;
+   456→      }
+   457→      const res = await fetch(`/api/admin/pendapatan?id=${deletingItem.id}`, {
+   458→        method: "DELETE",
+   459→        headers: { "Content-Type": "application/json" },
+   460→        body: JSON.stringify(deleteBody),
+   461→      });
+   462→      if (!res.ok) {
+   463→        const errJson = await res.json().catch(() => ({}));
+   464→        throw new Error(errJson.error || "Gagal menghapus data");
+   465→      }
+   466→      toast({
+   467→        title: "Berhasil",
+   468→        description: "Data pendapatan berhasil dihapus",
+   469→      });
+   470→      setDeleteOpen(false);
+   471→      setDeletingItem(null);
+   472→      fetchData();
+   473→    } catch (err) {
+   474→      toast({
+   475→        title: "Error",
+   476→        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+   477→        variant: "destructive",
+   478→      });
+   479→    } finally {
+   480→      setSubmitting(false);
+   481→    }
+   482→  };
+   483→
+   484→  const handlePageChange = (page: number) => {
+   485→    setPagination((prev) => ({ ...prev, page }));
+   486→  };
+   487→
+   488→  if (!tahunAnggaranId) {
+   489→    return (
+   490→      <Card>
+   491→        <CardContent className="py-12">
+   492→          <p className="text-center text-muted-foreground text-sm">
+   493→            Pilih tahun anggaran terlebih dahulu untuk mengelola data pendapatan
+   494→          </p>
+   495→        </CardContent>
+   496→      </Card>
+   497→    );
+   498→  }
+   499→
+   500→  return (
+   501→    <Card>
+   502→      <CardHeader>
+   503→        <CardTitle className="text-lg flex items-center gap-2">
+   504→          <div className="w-2 h-6 rounded-full" style={{ backgroundColor: pengaturan.warnaPrimary }} />
+   505→          Manajemen Pendapatan
+   506→          <Button
+   507→            variant="outline"
+   508→            size="sm"
+   509→            onClick={() => setImportOpen(true)}
+   510→            className="ml-auto gap-1.5 text-xs"
+   511→          >
+   512→            <FileSpreadsheet className="w-3.5 h-3.5" />
+   513→            Import Excel
+   514→          </Button>
+   515→        </CardTitle>
+   516→      </CardHeader>
+   517→      <CardContent>
+   518→        <GenericCrudTable
+   519→          columns={COLUMNS}
+   520→          data={data as unknown as Record<string, unknown>[]}
+   521→          onEdit={handleEdit}
+   522→          onDelete={handleDelete}
+   523→          onRefresh={fetchData}
+   524→          onCreate={handleCreate}
+   525→          loading={loading}
+   526→          searchPlaceholder="Cari nama atau kode akun..."
+   527→          searchValue={search}
+   528→          onSearchChange={(val) => {
+   529→            setSearch(val);
+   530→            setPagination((prev) => ({ ...prev, page: 1 }));
+   531→          }}
+   532→          renderCustomCell={(key, value) => {
+   533→            if (key === "count") {
+   534→              const num = Number(value ?? 1);
+   535→              if (num <= 1) return <span className="text-xs text-muted-foreground">1</span>;
+   536→              return (
+   537→                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+   538→                  {num} sumber
+   539→                </Badge>
+   540→              );
+   541→            }
+   542→            return String(value ?? "-");
+   543→          }}
+   544→          pagination={pagination}
+   545→          onPageChange={handlePageChange}
+   546→          itemName="Pendapatan"
+   547→          rowActions={rowActions}
+   548→        />
+   549→
+   550→        <DataFormDialog
+   551→          open={formOpen}
+   552→          onOpenChange={setFormOpen}
+   553→          title={editingItem ? "Edit Pendapatan" : "Tambah Pendapatan"}
+   554→          description="Masukkan data pendapatan daerah"
+   555→          fields={FORM_FIELDS}
+   556→          initialData={editingItem as unknown as Record<string, unknown> | null}
+   557→          onSubmit={handleSubmit}
+   558→          loading={submitting}
+   559→          resetKey={formKey}
+   560→        />
+   561→
+   562→        <DeleteConfirmDialog
+   563→          open={deleteOpen}
+   564→          onOpenChange={setDeleteOpen}
+   565→          itemName={
+   566→            deletingItem
+   567→              ? `${deletingItem.kodeAkun} - ${deletingItem.namaAkun}`
+   568→              : ""
+   569→          }
+   570→          onConfirm={handleConfirmDelete}
+   571→          loading={submitting}
+   572→        />
+   573→
+   574→        {/* Update Realisasi Dialog */}
+   575→        <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
+   576→          <DialogContent className="sm:max-w-md">
+   577→            <DialogHeader>
+   578→              <DialogTitle className="flex items-center gap-2">
+   579→                <PencilLine className="w-5 h-5 text-emerald-600" />
+   580→                Update Realisasi
+   581→              </DialogTitle>
+   582→              <DialogDescription>
+   583→                Update nilai realisasi untuk {updateItem?.kodeAkun} — {updateItem?.namaAkun}
+   584→              </DialogDescription>
+   585→            </DialogHeader>
+   586→            {updateItem && (
+   587→              <div className="space-y-4 py-2">
+   588→                <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
+   589→                  <div className="flex justify-between items-center">
+   590→                    <span className="text-xs text-muted-foreground">Kategori</span>
+   591→                    <Badge variant="outline" className="text-xs">{updateItem.kategori}</Badge>
+   592→                  </div>
+   593→                  <div className="flex justify-between items-center">
+   594→                    <span className="text-xs text-muted-foreground">Anggaran</span>
+   595→                    <RupiahCell value={updateItem.anggaran} className="text-sm font-medium" />
+   596→                  </div>
+   597→                  <div className="flex justify-between items-center">
+   598→                    <span className="text-xs text-muted-foreground">Realisasi Saat Ini</span>
+   599→                    <RupiahCell value={updateItem.realisasi} className="text-sm font-medium text-blue-600" />
+   600→                  </div>
+   601→                </div>
+   602→                <div className="space-y-2">
+   603→                  <Label htmlFor="new-realisasi-pendapatan" className="text-sm font-medium">Realisasi Baru (Rp)</Label>
+   604→                  <CurrencyInput id="new-realisasi-pendapatan" placeholder="Masukkan nilai realisasi baru" value={updateRealisasiNumber} onChange={(num) => setUpdateRealisasiNumber(num)} min={0} />
+   605→                  {updateRealisasiNumber > 0 && updateItem.anggaran > 0 && (
+   606→                    <p className="text-xs text-muted-foreground">Persentase baru: <span className="font-medium">{((updateRealisasiNumber / updateItem.anggaran) * 100).toFixed(2)}%</span></p>
+   607→                  )}
+   608→                </div>
+   609→                <div className="space-y-2">
+   610→                  <Label htmlFor="update-tanggal-pendapatan" className="text-sm font-medium flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" />Tanggal Update</Label>
+   611→                  <Input id="update-tanggal-pendapatan" type="date" value={updateTanggal} onChange={(e) => setUpdateTanggal(e.target.value)} />
+   612→                </div>
+   613→                <div className="space-y-2">
+   614→                  <Label htmlFor="update-keterangan-pendapatan" className="text-sm font-medium">Keterangan (Opsional)</Label>
+   615→                  <Textarea id="update-keterangan-pendapatan" placeholder="Contoh: Realisasi triwulan 3" value={updateKeterangan} onChange={(e) => setUpdateKeterangan(e.target.value)} rows={2} />
+   616→                </div>
+   617→              </div>
+   618→            )}
+   619→            <DialogFooter className="gap-2">
+   620→              <Button variant="outline" onClick={() => setUpdateDialogOpen(false)} disabled={updateSubmitting}>Batal</Button>
+   621→              <Button onClick={handleSubmitUpdate} disabled={updateSubmitting} className="text-white gap-1.5" style={{ backgroundColor: pengaturan.warnaPrimary }}>
+   622→                {updateSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <PencilLine className="w-4 h-4" />}
+   623→                {updateSubmitting ? "Menyimpan..." : "Update Realisasi"}
+   624→              </Button>
+   625→            </DialogFooter>
+   626→          </DialogContent>
+   627→        </Dialog>
+   628→
+   629→        {/* History Dialog */}
+   630→        <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+   631→          <DialogContent className="sm:max-w-lg max-h-[80vh]">
+   632→            <DialogHeader>
+   633→              <DialogTitle className="flex items-center gap-2">
+   634→                <History className="w-5 h-5 text-amber-600" />
+   635→                Riwayat Realisasi
+   636→              </DialogTitle>
+   637→              <DialogDescription>
+   638→                Riwayat perubahan realisasi untuk {historyItem?.kodeAkun} — {historyItem?.namaAkun}
+   639→              </DialogDescription>
+   640→            </DialogHeader>
+   641→
+   642→            <div className="py-2 max-h-[55vh] overflow-y-auto custom-scrollbar">
+   643→              {historyLoading ? (
+   644→                <div className="space-y-3">
+   645→                  {Array.from({ length: 3 }).map((_, i) => (
+   646→                    <div key={i} className="p-3 rounded-lg border bg-muted/30 animate-pulse">
+   647→                      <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+   648→                      <div className="h-3 bg-muted rounded w-1/2" />
+   649→                    </div>
+   650→                  ))}
+   651→                </div>
+   652→              ) : historyData.length === 0 ? (
+   653→                <div className="text-center py-8">
+   654→                  <History className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+   655→                  <p className="text-sm text-muted-foreground">Belum ada riwayat perubahan</p>
+   656→                </div>
+   657→              ) : (
+   658→                <div className="space-y-3">
+   659→                  {historyData.map((record) => {
+   660→                    const diff = calcDifference(record.realisasiBaru, record.realisasiLama);
+   661→                    const isIncrease = diff > 0;
+   662→                    const isDecrease = diff < 0;
+   663→
+   664→                    return (
+   665→                      <div
+   666→                        key={record.id}
+   667→                        className="relative p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+   668→                      >
+   669→                        {/* Timeline dot */}
+   670→                        <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+   671→                          style={{
+   672→                            backgroundColor: isIncrease
+   673→                              ? "#10b981"
+   674→                              : isDecrease
+   675→                              ? "#ef4444"
+   676→                              : "#6b7280",
+   677→                          }}
+   678→                        />
+   679→
+   680→                        <div className="pl-3 space-y-2">
+   681→                          {/* Header: Date & User */}
+   682→                          <div className="flex items-center justify-between">
+   683→                            <div className="flex items-center gap-1.5">
+   684→                              <CalendarClock className="w-3.5 h-3.5 text-muted-foreground" />
+   685→                              <span className="text-xs font-medium">
+   686→                                {formatDate(record.tanggalUpdate)}
+   687→                              </span>
+   688→                            </div>
+   689→                            {record.updatedBy && (
+   690→                              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+   691→                                oleh {record.updatedBy}
+   692→                              </span>
+   693→                            )}
+   694→                          </div>
+   695→
+   696→                          {/* Value change */}
+   697→                          <div className="flex items-center gap-2 text-sm">
+   698→                            <RupiahCell value={record.realisasiLama} className="text-muted-foreground line-through" />
+   699→                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+   700→                            <RupiahCell value={record.realisasiBaru} className="font-medium" />
+   701→                            {isIncrease && (
+   702→                              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-0.5">
+   703→                                <TrendingUp className="w-2.5 h-2.5" />
+   704→                                <RupiahCell value={Math.abs(diff)} prefix="+" />
+   705→                              </Badge>
+   706→                            )}
+   707→                            {isDecrease && (
+   708→                              <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-200 gap-0.5">
+   709→                                <TrendingDown className="w-2.5 h-2.5" />
+   710→                                <RupiahCell value={Math.abs(diff)} prefix="-" />
+   711→                              </Badge>
+   712→                            )}
+   713→                          </div>
+   714→
+   715→                          {/* Keterangan */}
+   716→                          {record.keterangan && (
+   717→                            <div className="flex items-center gap-2">
+   718→                              <span className="text-xs text-muted-foreground">
+   719→                                {record.keterangan}
+   720→                              </span>
+   721→                            </div>
+   722→                          )}
+   723→                        </div>
+   724→                      </div>
+   725→                    );
+   726→                  })}
+   727→                </div>
+   728→              )}
+   729→            </div>
+   730→
+   731→            <DialogFooter>
+   732→              <Button
+   733→                variant="outline"
+   734→                onClick={() => setHistoryDialogOpen(false)}
+   735→              >
+   736→                Tutup
+   737→              </Button>
+   738→            </DialogFooter>
+   739→          </DialogContent>
+   740→        </Dialog>
+   741→
+   742→        {/* Import Dialog */}
+   743→        <ImportDialog
+   744→          open={importOpen}
+   745→          onOpenChange={setImportOpen}
+   746→          jenis="pendapatan"
+   747→          tahunAnggaranId={tahunAnggaranId}
+   748→          onSuccess={fetchData}
+   749→        />
+   750→      </CardContent>
+   751→    </Card>
+   752→  );
+   753→}
+   754→

@@ -758,3 +758,40 @@ Stage Summary:
   - Settings UI with input field and live preview
   - Version displayed in footer as "v{version}"
   - Configurable via Admin → Pengaturan → Versi Aplikasi
+---
+Task ID: 1
+Agent: main
+Task: Add PDF import feature with 17-digit account code extraction and OPD-based role restrictions
+
+Work Log:
+- Installed pdf-parse library for server-side PDF text extraction
+- Created PDF Import API route at /api/admin/import-pdf that:
+  - Parses PDF files and extracts account code patterns (digit groups separated by dots, 13-25 chars)
+  - Supports two actions: "parse" (preview) and "import" (actual import)
+  - Implements role-based OPD restrictions: OPD users can only import to their own OPD, admin/superadmin can choose any OPD
+  - Extracts associated data (nama akun, anggaran, realisasi) from text context around each code
+  - Handles mode: upsert (overwrite matching) and replace (delete all + insert)
+  - Syncs RealisasiAkun and RealisasiSkpd after import
+- Created PdfImportDialog component with:
+  - PDF file upload with drag-and-drop support
+  - OPD selector dropdown (restricted for OPD users, searchable for admin/superadmin)
+  - Jenis selector (pendapatan/belanja/pembiayaan)
+  - Kategori default selector with batch apply
+  - Preview table with editable rows, checkbox selection, and 17-digit badge highlighting
+  - Import mode toggle (upsert/replace)
+  - Role-based UI indicators (admin badge, OPD restriction notice)
+  - Animated steps (upload → preview → result)
+- Integrated PdfImportDialog into PendapatanManager, BelanjaManager, PembiayaanManager with "Import PDF" button
+- Added OPD selection to existing ImportDialog (CSV/XLSX) for consistency:
+  - Admin/superadmin can now choose OPD target when importing from Excel/CSV
+  - OPD users see restriction notice
+- Updated existing /api/admin/import route to accept opdId parameter for admin/superadmin OPD selection
+- Fixed __none__ value handling for OPD selector (data global vs OPD-specific)
+- Verified with Agent Browser: PDF Import dialog opens correctly, OPD selector shows all OPDs, both Import PDF and Import Excel buttons appear on all three managers
+
+Stage Summary:
+- PDF import feature fully implemented with 17-digit account code extraction from PDF files
+- OPD selection with role-based restrictions works correctly (admin/superadmin can choose, OPD users restricted)
+- All three data managers (Pendapatan, Belanja, Pembiayaan) have both Import PDF and Import Excel buttons
+- Both import dialogs (PDF and Excel/CSV) now support OPD selection
+- No lint errors, dev server running cleanly

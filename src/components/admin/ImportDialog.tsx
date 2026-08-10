@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Upload,
   Download,
@@ -25,10 +26,21 @@ import {
   Eye,
   X,
   FileDown,
+  Building2,
+  ShieldCheck,
+  ShieldX,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePengaturan } from "@/context/PengaturanContext";
 import * as XLSX from 'xlsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 type JenisData = "pendapatan" | "belanja" | "pembiayaan";
 
@@ -75,6 +87,7 @@ export default function ImportDialog({
 }: ImportDialogProps) {
   const { toast } = useToast();
   const { pengaturan } = usePengaturan();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
@@ -92,6 +105,26 @@ export default function ImportDialog({
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
 
+  // OPD selection
+  const [opdList, setOpdList] = useState<Array<{ id: string; kodeOpd: string; namaOpd: string }>>([]);
+  const [selectedOpdId, setSelectedOpdId] = useState<string>("");
+  const [opdLoading, setOpdLoading] = useState(false);
+
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+  const isOpdUser = user?.role === "opd";
+
+  // Fetch OPD list when dialog opens
+  useEffect(() => {
+    if (open && isAdmin && tahunAnggaranId) {
+      setOpdLoading(true);
+      fetch(`/api/admin/opd-list?tahunAnggaranId=${tahunAnggaranId}`)
+        .then(res => res.json())
+        .then(data => { if (data.data) setOpdList(data.data); })
+        .catch(() => {})
+        .finally(() => setOpdLoading(false));
+    }
+  }, [open, isAdmin, tahunAnggaranId]);
+
   const reset = useCallback(() => {
     setStep("upload");
     setParsedRows([]);
@@ -100,6 +133,7 @@ export default function ImportDialog({
     setResult(null);
     setMode("upsert");
     setUploadedFileName("");
+    setSelectedOpdId("");
   }, []);
 
   const handleClose = () => {
@@ -415,6 +449,7 @@ export default function ImportDialog({
           tahunAnggaranId,
           rows: parsedRows,
           mode,
+          opdId: selectedOpdId && selectedOpdId !== "__none__" ? selectedOpdId : null,
         }),
       });
 
@@ -489,6 +524,52 @@ export default function ImportDialog({
               exit={{ opacity: 0, x: 20 }}
               className="space-y-4"
             >
+              {/* OPD Selection for Admin/Superadmin */}
+              {isAdmin && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Building2 className="w-4 h-4" />
+                    OPD Tujuan Import
+                  </Label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-xs">
+                      <ShieldCheck className="w-3 h-3 mr-1" />
+                      {user?.role === "superadmin" ? "Super Admin" : "Admin"} — dapat memilih OPD
+                    </Badge>
+                  </div>
+                  {opdLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Memuat daftar OPD...
+                    </div>
+                  ) : (
+                    <Select value={selectedOpdId} onValueChange={setSelectedOpdId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="-- Tanpa OPD (Data Global) --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">-- Tanpa OPD (Data Global) --</SelectItem>
+                        {opdList.map(opd => (
+                          <SelectItem key={opd.id} value={opd.id}>
+                            {opd.kodeOpd} — {opd.namaOpd}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {/* OPD User Info */}
+              {isOpdUser && (
+                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                    <ShieldX className="w-4 h-4" />
+                    OPD User — Data hanya dapat diimpor ke OPD Anda sendiri
+                  </div>
+                </div>
+              )}
+
               {/* Download template - Professional dual format card */}
               <div className="rounded-xl border bg-gradient-to-br from-muted/30 to-muted/10 overflow-hidden">
                 <div className={`px-4 py-2.5 bg-gradient-to-r ${jenisGradients[jenis]}`}>

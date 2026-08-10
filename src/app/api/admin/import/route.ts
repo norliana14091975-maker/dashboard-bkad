@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { jenis, tahunAnggaranId, rows, mode } = body as {
+    const { jenis, tahunAnggaranId, rows, mode, opdId } = body as {
       jenis: JenisData
       tahunAnggaranId: string
       rows: Array<{
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
         realisasi: number
       }>
       mode: 'upsert' | 'replace'
+      opdId?: string | null
     }
 
     if (!jenis || !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis)) {
@@ -111,6 +112,16 @@ export async function POST(request: Request) {
       if (!finalOpdId) {
         return NextResponse.json({ error: 'OPD tidak ditemukan untuk tahun anggaran ini' }, { status: 403 })
       }
+    } else if (role === 'admin' || role === 'superadmin') {
+      // Admin/superadmin can specify an opdId or import globally
+      if (opdId && opdId !== '__none__') {
+        const targetOpd = await db.opd.findUnique({ where: { id: opdId } })
+        if (!targetOpd) {
+          return NextResponse.json({ error: 'OPD tidak ditemukan' }, { status: 400 })
+        }
+        finalOpdId = opdId
+      }
+      // If no opdId, import globally (finalOpdId = null)
     }
 
     const userName = (session.user as { name?: string })?.name || 'Unknown'

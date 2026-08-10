@@ -1,0 +1,602 @@
+     1→     1→     1→"use client";
+     2→     2→     2→
+     3→     3→     3→import { useState, useEffect, useCallback, useRef } from "react";
+     4→     4→     4→import Sidebar from "@/components/dashboard/Sidebar";
+     5→     5→     5→import DashboardHeader from "@/components/dashboard/DashboardHeader";
+     6→     6→     6→import SummaryCards from "@/components/dashboard/SummaryCards";
+     7→     7→     7→import PendapatanChart from "@/components/dashboard/PendapatanChart";
+     8→     8→     8→import BelanjaChart from "@/components/dashboard/BelanjaChart";
+     9→     9→     9→import TrendChart from "@/components/dashboard/TrendChart";
+    10→    10→    10→import RealisasiBarChart from "@/components/dashboard/RealisasiBarChart";
+    11→    11→    11→import DataTable from "@/components/dashboard/DataTable";
+    12→    12→    12→import RealisasiAkunView from "@/components/dashboard/RealisasiAkunView";
+    13→    13→    13→import RealisasiSkpdView from "@/components/dashboard/RealisasiSkpdView";
+    14→    14→    14→import APBDTable from "@/components/dashboard/APBDTable";
+    15→    15→    15→import TransparansiView from "@/components/dashboard/TransparansiView";
+    16→    16→    16→import SKPDQuickSummary from "@/components/dashboard/SKPDQuickSummary";
+    17→    17→    17→import AccountTable from "@/components/dashboard/AccountTable";
+    18→    18→    18→import OpdView from "@/components/dashboard/OpdView";
+    19→    19→    19→import ExecutiveSummaryView from "@/components/dashboard/ExecutiveSummaryView";
+    20→    20→    20→import AnalisisRisikoView from "@/components/dashboard/AnalisisRisikoView";
+    21→    21→    21→import FinancialCopilotView from "@/components/dashboard/FinancialCopilotView";
+    22→    22→    22→import {
+    23→    23→    23→  DashboardData,
+    24→    24→    24→  ActiveView,
+    25→    25→    25→  TahunAnggaranItem,
+    26→    26→    26→  formatRupiahShort,
+    27→    27→    27→} from "@/components/dashboard/types";
+    28→    28→    28→import AdminPanel from "@/components/admin/AdminPanel";
+    29→    29→    29→import OpdPanel from "@/components/admin/OpdPanel";
+    30→    30→    30→import LoginForm from "@/components/auth/LoginForm";
+    31→    31→    31→import SetupWizard from "@/components/setup/SetupWizard";
+    32→    32→    32→import MobileBottomNav from "@/components/dashboard/MobileBottomNav";
+    33→    33→    33→import {
+    34→    34→    34→  AlertCircle,
+    35→    35→    35→  RefreshCw,
+    36→    36→    36→  Clock,
+    37→    37→    37→  Info,
+    38→    38→    38→  Sparkles,
+    39→    39→    39→  TrendingUp,
+    40→    40→    40→  Shield,
+    41→    41→    41→  BarChart3,
+    42→    42→    42→  Eye,
+    43→    43→    43→  Activity,
+    44→    44→    44→  ChevronRight,
+    45→    45→    45→  AlertTriangle,
+    46→    46→    46→  BotMessageSquare,
+    47→    47→    47→} from "lucide-react";
+    48→    48→    48→import { usePengaturan } from "@/context/PengaturanContext";
+    49→    49→    49→import { useAuth } from "@/hooks/use-auth";
+    50→    50→    50→import { motion, AnimatePresence } from "framer-motion";
+    51→    51→    51→import SplashLoader from "@/components/dashboard/SplashLoader";
+    52→    52→    52→import { useVisitorTracker } from "@/hooks/use-visitor-tracker";
+    53→    53→    53→
+    54→    54→    54→export default function Home() {
+    55→    55→    55→  const { pengaturan, logoSrc } = usePengaturan();
+    56→    56→    56→  const autoRefreshInterval = pengaturan.autoRefreshInterval ?? 0;
+    57→    57→    57→  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+    58→    58→    58→  const [data, setData] = useState<DashboardData | null>(null);
+    59→    59→    59→  const [loading, setLoading] = useState(true);
+    60→    60→    60→  const [loaderExiting, setLoaderExiting] = useState(false); // For modern loader fade-out
+    61→    61→    61→  const [error, setError] = useState<string | null>(null);
+    62→    62→    62→  const [tahun, setTahun] = useState<number>(0); // 0 = not yet initialized
+    63→    63→    63→  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+    64→    64→    64→  const [sidebarOpen, setSidebarOpen] = useState(false);
+    65→    65→    65→  const { stats: visitorStats } = useVisitorTracker(activeView);
+    66→    66→    66→
+    67→    67→    67→  // Setup wizard state
+    68→    68→    68→  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null); // null = checking
+    69→    69→    69→
+    70→    70→    70→  const MIN_LOADING_MS = pengaturan.loaderDisplayTime ?? 5000; // From settings
+    71→    71→    71→  const minLoadingRef = useRef(MIN_LOADING_MS);
+    72→    72→    72→  minLoadingRef.current = MIN_LOADING_MS;
+    73→    73→    73→
+    74→    74→    74→  // Auto-refresh state
+    75→    75→    75→  const [nextRefreshIn, setNextRefreshIn] = useState<number>(0); // seconds until next refresh
+    76→    76→    76→  const [isRefreshing, setIsRefreshing] = useState(false); // manual refresh spinner
+    77→    77→    77→  const lastRefreshRef = useRef<number>(0); // 0 = not yet initialized
+    78→    78→    78→  const autoRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // refresh timeout ref
+    79→    79→    79→  const autoRefreshIntervalRef = useRef(autoRefreshInterval); // track current interval
+    80→    80→    80→  autoRefreshIntervalRef.current = autoRefreshInterval;
+    81→    81→    81→
+    82→    82→    82→  const fetchData = useCallback(async (tahunParam: number) => {
+    83→    83→    83→    setLoading(true);
+    84→    84→    84→    setLoaderExiting(false);
+    85→    85→    85→    setError(null);
+    86→    86→    86→    const startTime = Date.now();
+    87→    87→    87→    const minDisplay = minLoadingRef.current;
+    88→    88→    88→    try {
+    89→    89→    89→      const res = await fetch(`/api/dashboard?tahun=${tahunParam}`);
+    90→    90→    90→      if (!res.ok) throw new Error("Failed to fetch dashboard data");
+    91→    91→    91→      const json = await res.json();
+    92→    92→    92→      setData(json);
+    93→    93→    93→      // Auto-set tahun to the latest/active year on first load
+    94→    94→    94→      if (tahun === 0 && json.tahunList?.length > 0) {
+    95→    95→    95→        setTahun(json.tahun);
+    96→    96→    96→      }
+    97→    97→    97→    } catch (err) {
+    98→    98→    98→      setError(err instanceof Error ? err.message : "Unknown error");
+    99→    99→    99→    } finally {
+   100→   100→   100→      // Ensure loader is visible for at least minDisplay ms (0 = no minimum)
+   101→   101→   101→      if (minDisplay > 0) {
+   102→   102→   102→        const elapsed = Date.now() - startTime;
+   103→   103→   103→        const remaining = minDisplay - elapsed;
+   104→   104→   104→        if (remaining > 0) {
+   105→   105→   105→          await new Promise((r) => setTimeout(r, remaining));
+   106→   106→   106→        }
+   107→   107→   107→      }
+   108→   108→   108→      // For modern loader: trigger fade-out animation before unmounting
+   109→   109→   109→      if (pengaturan.loaderType === "modern") {
+   110→   110→   110→        setLoaderExiting(true);
+   111→   111→   111→      }
+   112→   112→   112→      setLoading(false);
+   113→   113→   113→      // Mark the initial data load time for auto-refresh countdown
+   114→   114→   114→      lastRefreshRef.current = Date.now();
+   115→   115→   115→    }
+   116→   116→   116→  }, [tahun, pengaturan.loaderType]);
+   117→   117→   117→
+   118→   118→   118→  // Silent refresh — updates data in background without showing loader
+   119→   119→   119→  const silentRefresh = useCallback(async (tahunParam: number) => {
+   120→   120→   120→    try {
+   121→   121→   121→      const res = await fetch(`/api/dashboard?tahun=${tahunParam}`);
+   122→   122→   122→      if (!res.ok) throw new Error("Failed to fetch dashboard data");
+   123→   123→   123→      const json = await res.json();
+   124→   124→   124→      setData(json);
+   125→   125→   125→      lastRefreshRef.current = Date.now();
+   126→   126→   126→    } catch (err) {
+   127→   127→   127→      // Silently fail — don't show error for background refreshes
+   128→   128→   128→      console.warn("Auto-refresh failed:", err instanceof Error ? err.message : "Unknown error");
+   129→   129→   129→    }
+   130→   130→   130→  }, []);
+   131→   131→   131→
+   132→   132→   132→  // Check if setup is needed on mount
+   133→   133→   133→  useEffect(() => {
+   134→   134→   134→    fetch("/api/setup")
+   135→   135→   135→      .then((res) => res.json())
+   136→   136→   136→      .then((json) => {
+   137→   137→   137→        setNeedsSetup(json.needsSetup === true);
+   138→   138→   138→      })
+   139→   139→   139→      .catch(() => {
+   140→   140→   140→        // If error, assume setup is not needed (database exists)
+   141→   141→   141→        setNeedsSetup(false);
+   142→   142→   142→      });
+   143→   143→   143→  }, []);
+   144→   144→   144→
+   145→   145→   145→  useEffect(() => {
+   146→   146→   146→    // Don't fetch dashboard data if setup is needed
+   147→   147→   147→    if (needsSetup === true || needsSetup === null) return;
+   148→   148→   148→    // On first load, fetch the active year from the API
+   149→   149→   149→    if (tahun === 0) {
+   150→   150→   150→      fetch('/api/dashboard').then(res => res.json()).then(json => {
+   151→   151→   151→        if (json.activeTahun) {
+   152→   152→   152→          setTahun(json.activeTahun);
+   153→   153→   153→        } else if (json.tahun) {
+   154→   154→   154→          setTahun(json.tahun);
+   155→   155→   155→        }
+   156→   156→   156→      }).catch(() => {
+   157→   157→   157→        setTahun(2024); // fallback
+   158→   158→   158→      });
+   159→   159→   159→    } else {
+   160→   160→   160→      fetchData(tahun);
+   161→   161→   161→    }
+   162→   162→   162→  }, [tahun, fetchData, needsSetup]);
+   163→   163→   163→
+   164→   164→   164→  const handleSetupComplete = useCallback(() => {
+   165→   165→   165→    setNeedsSetup(false);
+   166→   166→   166→    // Reload to refresh all data
+   167→   167→   167→    window.location.reload();
+   168→   168→   168→  }, []);
+   169→   169→   169→
+   170→   170→   170→  // Helper: check if a view is hidden for the current user role
+   171→   171→   171→  const isViewHidden = useCallback((viewId: string): boolean => {
+   172→   172→   172→    const userRole = user?.role || "public";
+   173→   173→   173→    const hiddenItems = pengaturan.sidebarConfig?.hiddenItems;
+   174→   174→   174→    if (!hiddenItems) return false;
+   175→   175→   175→    const roleHidden = hiddenItems[userRole] || [];
+   176→   176→   176→    return roleHidden.includes(viewId);
+   177→   177→   177→  }, [user?.role, pengaturan.sidebarConfig]);
+   178→   178→   178→
+   179→   179→   179→  // Listen for quick navigation events from DashboardView
+   180→   180→   180→  useEffect(() => {
+   181→   181→   181→    const handler = (e: Event) => {
+   182→   182→   182→      const customEvent = e as CustomEvent<ActiveView>;
+   183→   183→   183→      if (customEvent.detail && !isViewHidden(customEvent.detail)) {
+   184→   184→   184→        setActiveView(customEvent.detail);
+   185→   185→   185→      }
+   186→   186→   186→    };
+   187→   187→   187→    window.addEventListener('navigate-view', handler);
+   188→   188→   188→    return () => window.removeEventListener('navigate-view', handler);
+   189→   189→   189→  }, [isViewHidden]);
+   190→   190→   190→
+   191→   191→   191→  // Redirect to dashboard if activeView is hidden for current role
+   192→   192→   192→  useEffect(() => {
+   193→   193→   193→    if (activeView !== "dashboard" && isViewHidden(activeView)) {
+   194→   194→   194→      setActiveView("dashboard");
+   195→   195→   195→    }
+   196→   196→   196→  }, [activeView, isViewHidden]);
+   197→   197→   197→
+   198→   198→   198→  // Auto-refresh interval logic — robust implementation
+   199→   199→   199→  // Only depends on autoRefreshInterval and tahun. Does NOT depend on `loading`
+   200→   200→   200→  // to prevent the timer from resetting every time loading state changes.
+   201→   201→   201→  useEffect(() => {
+   202→   202→   202→    // Clear any existing refresh timer
+   203→   203→   203→    if (autoRefreshTimerRef.current) {
+   204→   204→   204→      clearTimeout(autoRefreshTimerRef.current);
+   205→   205→   205→      autoRefreshTimerRef.current = null;
+   206→   206→   206→    }
+   207→   207→   207→
+   208→   208→   208→    if (autoRefreshInterval <= 0 || tahun === 0) {
+   209→   209→   209→      setNextRefreshIn(0);
+   210→   210→   210→      lastRefreshRef.current = 0;
+   211→   211→   211→      return;
+   212→   212→   212→    }
+   213→   213→   213→
+   214→   214→   214→    const intervalMs = autoRefreshInterval * 60 * 1000; // Convert minutes to ms
+   215→   215→   215→
+   216→   216→   216→    // Only initialize lastRefreshRef if it hasn't been set yet
+   217→   217→   217→    // (i.e., first time auto-refresh activates, or after it was reset)
+   218→   218→   218→    if (lastRefreshRef.current === 0) {
+   219→   219→   219→      lastRefreshRef.current = Date.now();
+   220→   220→   220→    }
+   221→   221→   221→
+   222→   222→   222→    // Countdown timer — updates every second, reads from ref (no re-render dependency)
+   223→   223→   223→    const countdownInterval = setInterval(() => {
+   224→   224→   224→      const elapsed = Date.now() - lastRefreshRef.current;
+   225→   225→   225→      const remaining = Math.max(0, Math.ceil((intervalMs - elapsed) / 1000));
+   226→   226→   226→      setNextRefreshIn(remaining);
+   227→   227→   227→    }, 1000);
+   228→   228→   228→
+   229→   229→   229→    // Auto-refresh using setTimeout (schedules next refresh after current one completes)
+   230→   230→   230→    // This prevents interval drift and overlapping refreshes
+   231→   231→   231→    const scheduleRefresh = () => {
+   232→   232→   232→      const elapsed = Date.now() - lastRefreshRef.current;
+   233→   233→   233→      const delay = Math.max(0, intervalMs - elapsed);
+   234→   234→   234→      autoRefreshTimerRef.current = setTimeout(async () => {
+   235→   235→   235→        await silentRefresh(tahun);
+   236→   236→   236→        // After refresh completes, update the ref and schedule the next one
+   237→   237→   237→        // (silentRefresh already sets lastRefreshRef.current = Date.now())
+   238→   238→   238→        // Only reschedule if the interval setting hasn't changed
+   239→   239→   239→        if (autoRefreshIntervalRef.current === autoRefreshInterval) {
+   240→   240→   240→          scheduleRefresh();
+   241→   241→   241→        }
+   242→   242→   242→      }, delay);
+   243→   243→   243→    };
+   244→   244→   244→    scheduleRefresh();
+   245→   245→   245→
+   246→   246→   246→    return () => {
+   247→   247→   247→      clearInterval(countdownInterval);
+   248→   248→   248→      if (autoRefreshTimerRef.current) {
+   249→   249→   249→        clearTimeout(autoRefreshTimerRef.current);
+   250→   250→   250→        autoRefreshTimerRef.current = null;
+   251→   251→   251→      }
+   252→   252→   252→    };
+   253→   253→   253→  }, [autoRefreshInterval, tahun, silentRefresh]);
+   254→   254→   254→
+   255→   255→   255→  // Show setup wizard if needed (after all hooks)
+   256→   256→   256→  if (needsSetup === null) {
+   257→   257→   257→    return (
+   258→   258→   258→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-amber-50">
+   259→   259→   259→        <div className="flex flex-col items-center gap-4">
+   260→   260→   260→          <div className="animate-spin w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full" />
+   261→   261→   261→          <p className="text-sm text-muted-foreground">Memeriksa konfigurasi...</p>
+   262→   262→   262→        </div>
+   263→   263→   263→      </div>
+   264→   264→   264→    );
+   265→   265→   265→  }
+   266→   266→   266→
+   267→   267→   267→  if (needsSetup === true) {
+   268→   268→   268→    return <SetupWizard onComplete={handleSetupComplete} />;
+   269→   269→   269→  }
+   270→   270→   270→
+   271→   271→   271→  const handleTahunChange = (newTahun: number) => {
+   272→   272→   272→    // Reset the auto-refresh countdown when user changes tahun
+   273→   273→   273→    lastRefreshRef.current = 0; // Will be re-initialized when fetchData completes
+   274→   274→   274→    setTahun(newTahun);
+   275→   275→   275→  };
+   276→   276→   276→
+   277→   277→   277→  const handleViewChange = (view: ActiveView) => {
+   278→   278→   278→    setActiveView(view);
+   279→   279→   279→  };
+   280→   280→   280→
+   281→   281→   281→  // Helper to get tahun list as numbers for backward compatibility
+   282→   282→   282→  const tahunListNumbers = data?.tahunList?.map(t => t.tahun) || [];
+   283→   283→   283→  const activeTahunFromData = data?.tahunList?.find(t => t.aktif)?.tahun || tahun;
+   284→   284→   284→
+   285→   285→   285→  const renderContent = () => {
+   286→   286→   286→    // Admin/OPD view: show login if not authenticated, panel if authenticated
+   287→   287→   287→    if (activeView === "admin") {
+   288→   288→   288→      if (authLoading) {
+   289→   289→   289→        return (
+   290→   290→   290→          <div className="flex items-center justify-center py-20">
+   291→   291→   291→            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+   292→   292→   292→          </div>
+   293→   293→   293→        );
+   294→   294→   294→      }
+   295→   295→   295→      if (!isAuthenticated) {
+   296→   296→   296→        return <LoginForm />;
+   297→   297→   297→      }
+   298→   298→   298→      // Show OPD Panel for OPD role, Admin Panel for admin/superadmin/bupati
+   299→   299→   299→      if (user?.role === "opd") {
+   300→   300→   300→        return <OpdPanel tahun={tahun} tahunList={data?.tahunList || []} />;
+   301→   301→   301→      }
+   302→   302→   302→      return <AdminPanel tahun={tahun} tahunList={data?.tahunList || []} />;
+   303→   303→   303→    }
+   304→   304→   304→
+   305→   305→   305→    // Modern loader: keep showing during fade-out animation
+   306→   306→   306→    if (loading || loaderExiting) {
+   307→   307→   307→      if (pengaturan.loaderType === "modern") {
+   308→   308→   308→        return <ModernSplashLoader isLoading={loading} onExitComplete={() => setLoaderExiting(false)} />;
+   309→   309→   309→      }
+   310→   310→   310→      if (loading) return <LoadingSkeleton />;
+   311→   311→   311→    }
+   312→   312→   312→    if (error) return <ErrorState error={error} onRetry={() => fetchData(tahun)} />;
+   313→   313→   313→    if (!data) return null;
+   314→   314→   314→
+   315→   315→   315→    switch (activeView) {
+   316→   316→   316→      case "dashboard":
+   317→   317→   317→        return <DashboardView data={data} />;
+   318→   318→   318→      case "ringkasan-eksekutif":
+   319→   319→   319→        return <ExecutiveSummaryView data={data} />;
+   320→   320→   320→      case "analisis-risiko":
+   321→   321→   321→        return <AnalisisRisikoView data={data} />;
+   322→   322→   322→      case "copilot":
+   323→   323→   323→        return <FinancialCopilotView data={data} />;
+   324→   324→   324→      case "apbd":
+   325→   325→   325→        return <APBDTable data={data} />;
+   326→   326→   326→      case "pendapatan":
+   327→   327→   327→        return <PendapatanView data={data} />;
+   328→   328→   328→      case "belanja":
+   329→   329→   329→        return <BelanjaView data={data} />;
+   330→   330→   330→      case "pembiayaan":
+   331→   331→   331→        return <PembiayaanView data={data} />;
+   332→   332→   332→      case "realisasi-akun":
+   333→   333→   333→        return <RealisasiAkunView data={data} />;
+   334→   334→   334→      case "realisasi-skpd":
+   335→   335→   335→        return <RealisasiSkpdView data={data} />;
+   336→   336→   336→      case "opd":
+   337→   337→   337→        return <OpdView data={data} />;
+   338→   338→   338→      case "transparansi":
+   339→   339→   339→        return <TransparansiView data={data} />;
+   340→   340→   340→      default:
+   341→   341→   341→        return <DashboardView data={data} />;
+   342→   342→   342→    }
+   343→   343→   343→  };
+   344→   344→   344→
+   345→   345→   345→  // When showing login form for admin, don't show the sidebar/header layout
+   346→   346→   346→  if (activeView === "admin" && !authLoading && !isAuthenticated) {
+   347→   347→   347→    return (
+   348→   348→   348→      <div className="min-h-screen bg-background">
+   349→   349→   349→        <LoginForm />
+   350→   350→   350→      </div>
+   351→   351→   351→    );
+   352→   352→   352→  }
+   353→   353→   353→
+   354→   354→   354→  return (
+   355→   355→   355→    <div className="min-h-screen flex bg-background">
+   356→   356→   356→      <Sidebar
+   357→   357→   357→        activeView={activeView}
+   358→   358→   358→        onViewChange={handleViewChange}
+   359→   359→   359→        isOpen={sidebarOpen}
+   360→   360→   360→        onToggle={() => setSidebarOpen(!sidebarOpen)}
+   361→   361→   361→      />
+   362→   362→   362→
+   363→   363→   363→      <div className="flex-1 flex flex-col min-w-0 lg:ml-[60px]">
+   364→   364→   364→        <DashboardHeader
+   365→   365→   365→          activeView={activeView}
+   366→   366→   366→          tahun={tahun}
+   367→   367→   367→          tahunList={data?.tahunList || []}
+   368→   368→   368→          activeTahun={activeTahunFromData}
+   369→   369→   369→          onTahunChange={handleTahunChange}
+   370→   370→   370→          onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+   371→   371→   371→          onNavigateDashboard={() => setActiveView("dashboard")}
+   372→   372→   372→          autoRefreshInterval={autoRefreshInterval}
+   373→   373→   373→          nextRefreshIn={nextRefreshIn}
+   374→   374→   374→          onManualRefresh={() => {
+   375→   375→   375→            if (tahun > 0) {
+   376→   376→   376→              setIsRefreshing(true);
+   377→   377→   377→              // Reset the auto-refresh countdown when user manually refreshes
+   378→   378→   378→              lastRefreshRef.current = Date.now();
+   379→   379→   379→              silentRefresh(tahun).finally(() => setIsRefreshing(false));
+   380→   380→   380→            }
+   381→   381→   381→          }}
+   382→   382→   382→          isRefreshing={isRefreshing}
+   383→   383→   383→          visitorOnline={visitorStats.online}
+   384→   384→   384→          visitorToday={visitorStats.today}
+   385→   385→   385→        />
+   386→   386→   386→
+   387→   387→   387→        <main className="flex-1 p-4 pb-20 lg:p-6 lg:pb-6 overflow-auto">
+   388→   388→   388→          {/* Auto-refresh inline indicator (compact, moved to header as primary) */}
+   389→   389→   389→          {autoRefreshInterval > 0 && !loading && nextRefreshIn > 0 && data && (
+   390→   390→   390→            <div className="flex items-center justify-end mb-2 lg:hidden">
+   391→   391→   391→              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/60 rounded-full px-2.5 py-1 backdrop-blur-sm">
+   392→   392→   392→                <RefreshCw className="w-3 h-3 opacity-60" />
+   393→   393→   393→                <span>
+   394→   394→   394→                  Refresh dalam {nextRefreshIn >= 60 ? `${Math.floor(nextRefreshIn / 60)}m ${nextRefreshIn % 60}s` : `${nextRefreshIn}s`}
+   395→   395→   395→                </span>
+   396→   396→   396→              </div>
+   397→   397→   397→            </div>
+   398→   398→   398→          )}
+   399→   399→   399→          <AnimatePresence mode="wait">
+   400→   400→   400→            <motion.div
+   401→   401→   401→              key={activeView}
+   402→   402→   402→              initial={{ opacity: 0, y: 12 }}
+   403→   403→   403→              animate={{ opacity: 1, y: 0 }}
+   404→   404→   404→              exit={{ opacity: 0, y: -12 }}
+   405→   405→   405→              transition={{ duration: 0.35, ease: "easeInOut" }}
+   406→   406→   406→            >
+   407→   407→   407→              {renderContent()}
+   408→   408→   408→            </motion.div>
+   409→   409→   409→          </AnimatePresence>
+   410→   410→   410→        </main>
+   411→   411→   411→
+   412→   412→   412→        {/* Footer — hidden on mobile (replaced by MobileBottomNav) */}
+   413→   413→   413→        <footer
+   414→   414→   414→          className="hidden lg:block text-white px-4 lg:px-6 py-3 mt-auto"
+   415→   415→   415→          style={{
+   416→   416→   416→            background: `linear-gradient(to right, ${pengaturan.warnaPrimary}, ${pengaturan.warnaSecondary})`,
+   417→   417→   417→          }}
+   418→   418→   418→        >
+   419→   419→   419→          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+   420→   420→   420→            <div className="flex items-center gap-3">
+   421→   421→   421→              <img
+   422→   422→   422→                src={logoSrc}
+   423→   423→   423→                alt="Logo Kabupaten Seruyan"
+   424→   424→   424→                width={24}
+   425→   425→   425→                height={24}
+   426→   426→   426→                className="w-6 h-6 object-contain"
+   427→   427→   427→              />
+   428→   428→   428→              <p className="text-xs text-emerald-100">
+   429→   429→   429→                © {new Date().getFullYear()} {pengaturan.namaPemerintah}
+   430→   430→   430→              </p>
+   431→   431→   431→              <span className="text-emerald-200/40">|</span>
+   432→   432→   432→              <span className="text-[10px] font-mono font-semibold text-emerald-200/80">
+   433→   433→   433→                v{pengaturan.versiAplikasi || "1.0.0"}
+   434→   434→   434→              </span>
+   435→   435→   435→            </div>
+   436→   436→   436→            <div className="flex items-center gap-3">
+   437→   437→   437→              {/* Visitor stats */}
+   438→   438→   438→              <div className="flex items-center gap-2 text-[10px] text-emerald-200/70">
+   439→   439→   439→                <span className="flex items-center gap-1">
+   440→   440→   440→                  <span className="relative flex h-2 w-2">
+   441→   441→   441→                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+   442→   442→   442→                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+   443→   443→   443→                  </span>
+   444→   444→   444→                  <span className="ml-0.5 font-semibold text-emerald-100">{visitorStats.online}</span> online
+   445→   445→   445→                </span>
+   446→   446→   446→                <span className="text-emerald-200/40">•</span>
+   447→   447→   447→                <span>
+   448→   448→   448→                  <span className="font-semibold text-emerald-100">{visitorStats.today}</span> hari ini
+   449→   449→   449→                </span>
+   450→   450→   450→                <span className="text-emerald-200/40">•</span>
+   451→   451→   451→                <span>
+   452→   452→   452→                  <span className="font-semibold text-emerald-100">{visitorStats.total}</span> total
+   453→   453→   453→                </span>
+   454→   454→   454→              </div>
+   455→   455→   455→              <span className="text-emerald-200/40">|</span>
+   456→   456→   456→              <p className="text-[10px] text-emerald-200/60">
+   457→   457→   457→                Dashboard Monitoring Pengelolaan Keuangan Daerah
+   458→   458→   458→              </p>
+   459→   459→   459→            </div>
+   460→   460→   460→          </div>
+   461→   461→   461→        </footer>
+   462→   462→   462→      </div>
+   463→   463→   463→
+   464→   464→   464→      {/* Mobile Bottom Navigation — shown only on mobile */}
+   465→   465→   465→      <MobileBottomNav
+   466→   466→   466→        activeView={activeView}
+   467→   467→   467→        onViewChange={handleViewChange}
+   468→   468→   468→        onOpenSidebar={() => setSidebarOpen(true)}
+   469→   469→   469→      />
+   470→   470→   470→    </div>
+   471→   471→   471→  );
+   472→   472→   472→}
+   473→   473→   473→
+   474→   474→   474→// ============ FLOATING ORB COMPONENT ============
+   475→   475→   475→function FloatingOrb({ className, style }: { className?: string; style?: React.CSSProperties }) {
+   476→   476→   476→  return (
+   477→   477→   477→    <div
+   478→   478→   478→      className={`absolute rounded-full blur-3xl pointer-events-none ${className}`}
+   479→   479→   479→      style={style}
+   480→   480→   480→    />
+   481→   481→   481→  );
+   482→   482→   482→}
+   483→   483→   483→
+   484→   484→   484→// ============ DASHBOARD VIEW (MODERN ANIMATED) ============
+   485→   485→   485→function DashboardView({ data }: { data: DashboardData }) {
+   486→   486→   486→  const { pengaturan, logoSrc } = usePengaturan();
+   487→   487→   487→  const { user } = useAuth();
+   488→   488→   488→  const containerVariants = {
+   489→   489→   489→    hidden: { opacity: 0 },
+   490→   490→   490→    visible: {
+   491→   491→   491→      opacity: 1,
+   492→   492→   492→      transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+   493→   493→   493→    },
+   494→   494→   494→  };
+   495→   495→   495→
+   496→   496→   496→  const itemVariants = {
+   497→   497→   497→    hidden: { opacity: 0, y: 30, scale: 0.97 },
+   498→   498→   498→    visible: {
+   499→   499→   499→      opacity: 1,
+   500→   500→   500→      y: 0,
+   501→   501→   501→      scale: 1,
+   502→   502→   502→      transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] },
+   503→   503→   503→    },
+   504→   504→   504→  };
+   505→   505→   505→
+   506→   506→   506→  // Helper: check if a view is hidden for the current user role
+   507→   507→   507→  const isViewHiddenForUser = (viewId: string): boolean => {
+   508→   508→   508→    const userRole = user?.role || "public";
+   509→   509→   509→    const hiddenItems = pengaturan.sidebarConfig?.hiddenItems;
+   510→   510→   510→    if (!hiddenItems) return false;
+   511→   511→   511→    const roleHidden = hiddenItems[userRole] || [];
+   512→   512→   512→    return roleHidden.includes(viewId);
+   513→   513→   513→  };
+   514→   514→   514→
+   515→   515→   515→  // Quick navigation items — filtered by sidebar visibility and copilot config
+   516→   516→   516→  const copilotEnabled = pengaturan.copilotConfig?.enabled ?? true;
+   517→   517→   517→  const allQuickNavItems = [
+   518→   518→   518→    { id: "ringkasan-eksekutif" as ActiveView, label: "Ringkasan Eksekutif", icon: BarChart3, color: "from-violet-500 to-purple-600", desc: "Executive Summary" },
+   519→   519→   519→    { id: "analisis-risiko" as ActiveView, label: "Analisis Risiko", icon: AlertTriangle, color: "from-rose-500 to-red-600", desc: "Risk Analysis" },
+   520→   520→   520→    { id: "copilot" as ActiveView, label: "AI Copilot", icon: BotMessageSquare, color: "from-amber-500 to-yellow-600", desc: "Tanya AI Keuangan" },
+   521→   521→   521→    { id: "realisasi-skpd" as ActiveView, label: "Realisasi SKPD", icon: TrendingUp, color: "from-teal-500 to-cyan-600", desc: "Per-SKPD/OPD" },
+   522→   522→   522→  ];
+   523→   523→   523→
+   524→   524→   524→  const quickNavItems = allQuickNavItems.filter((item) => {
+   525→   525→   525→    if (isViewHiddenForUser(item.id)) return false;
+   526→   526→   526→    if (item.id === "copilot" && !copilotEnabled) return false;
+   527→   527→   527→    return true;
+   528→   528→   528→  });
+   529→   529→   529→
+   530→   530→   530→  return (
+   531→   531→   531→    <motion.div
+   532→   532→   532→      variants={containerVariants}
+   533→   533→   533→      initial="hidden"
+   534→   534→   534→      animate="visible"
+   535→   535→   535→      className="space-y-6"
+   536→   536→   536→    >
+   537→   537→   537→      {/* ====== HERO BANNER - Modern Animated ====== */}
+   538→   538→   538→      <motion.div variants={itemVariants}>
+   539→   539→   539→        <div
+   540→   540→   540→          className="relative overflow-hidden rounded-2xl text-white p-8 lg:p-10"
+   541→   541→   541→          style={{
+   542→   542→   542→            background: `linear-gradient(135deg, ${pengaturan.warnaPrimary}, ${pengaturan.warnaSecondary}, ${pengaturan.warnaPrimary}dd)`,
+   543→   543→   543→          }}
+   544→   544→   544→        >
+   545→   545→   545→          {/* Animated background orbs */}
+   546→   546→   546→          <FloatingOrb
+   547→   547→   547→            className="w-72 h-72 bg-white/5 animate-float-orb-slow"
+   548→   548→   548→            style={{ top: '-60px', right: '-40px' }}
+   549→   549→   549→          />
+   550→   550→   550→          <FloatingOrb
+   551→   551→   551→            className="w-48 h-48 bg-white/[0.07] animate-float-orb"
+   552→   552→   552→            style={{ bottom: '-30px', left: '10%' }}
+   553→   553→   553→          />
+   554→   554→   554→          <FloatingOrb
+   555→   555→   555→            className="w-32 h-32 bg-white/[0.04] animate-float-orb-fast"
+   556→   556→   556→            style={{ top: '20%', right: '30%' }}
+   557→   557→   557→          />
+   558→   558→   558→          <FloatingOrb
+   559→   559→   559→            className="w-24 h-24 bg-yellow-300/10 animate-float-orb-slow"
+   560→   560→   560→            style={{ bottom: '10%', right: '15%' }}
+   561→   561→   561→          />
+   562→   562→   562→
+   563→   563→   563→          {/* Decorative rotating ring */}
+   564→   564→   564→          <div className="absolute -right-20 -top-20 w-60 h-60 border border-white/10 rounded-full animate-rotate-slow" />
+   565→   565→   565→          <div className="absolute -right-10 -top-10 w-40 h-40 border border-white/[0.06] rounded-full animate-rotate-slow" style={{ animationDirection: 'reverse' }} />
+   566→   566→   566→
+   567→   567→   567→          {/* Decorative particles */}
+   568→   568→   568→          {[...Array(6)].map((_, i) => (
+   569→   569→   569→            <div
+   570→   570→   570→              key={i}
+   571→   571→   571→              className="absolute w-1 h-1 bg-white/30 rounded-full animate-drift"
+   572→   572→   572→              style={{
+   573→   573→   573→                top: `${15 + i * 15}%`,
+   574→   574→   574→                left: `${10 + i * 14}%`,
+   575→   575→   575→                animationDelay: `${i * 1.3}s`,
+   576→   576→   576→                animationDuration: `${6 + i * 1.5}s`,
+   577→   577→   577→              }}
+   578→   578→   578→            />
+   579→   579→   579→          ))}
+   580→   580→   580→
+   581→   581→   581→          {/* Content */}
+   582→   582→   582→          <div className="relative flex flex-col sm:flex-row items-center gap-6 flex-1 min-w-0">
+   583→   583→   583→            {/* Logo */}
+   584→   584→   584→            <div className="relative shrink-0">
+   585→   585→   585→              <motion.img
+   586→   586→   586→                src={logoSrc}
+   587→   587→   587→                alt="Logo Kabupaten Seruyan"
+   588→   588→   588→                width={80}
+   589→   589→   589→                height={80}
+   590→   590→   590→                className="w-20 h-20 relative z-10 object-contain drop-shadow-lg"
+   591→   591→   591→                initial={{ scale: 0, rotate: -180 }}
+   592→   592→   592→                animate={{ scale: 1, rotate: 0 }}
+   593→   593→   593→                transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+   594→   594→   594→              />
+   595→   595→   595→            </div>
+   596→   596→   596→
+   597→   597→   597→            <div className="text-center sm:text-left flex-1 min-w-0">
+   598→   598→   598→              <motion.div
+   599→   599→   599→                initial={{ opacity: 0, x: -20 }}
+   600→   600→   600→                animate={{ opacity: 1, x: 0 }}
+
+[showing lines 1-600 of 1206; use offset=601 with limit to continue reading]

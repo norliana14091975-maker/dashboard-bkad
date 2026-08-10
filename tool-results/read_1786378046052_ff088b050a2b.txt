@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from "react";
+     4→import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+     5→import { Button } from "@/components/ui/button";
+     6→import { Input } from "@/components/ui/input";
+     7→import { Label } from "@/components/ui/label";
+     8→import { Textarea } from "@/components/ui/textarea";
+     9→import { useToast } from "@/hooks/use-toast";
+    10→import {
+    11→  Loader2,
+    12→  Save,
+    13→  Upload,
+    14→  Trash2,
+    15→  Palette,
+    16→  Building2,
+    17→  Image as ImageIcon,
+    18→  Info,
+    19→  RotateCcw,
+    20→  AlertTriangle,
+    21→  LayoutList,
+    22→  Eye,
+    23→  EyeOff,
+    24→  Activity,
+    25→  BotMessageSquare,
+    26→  Thermometer,
+    27→  MessageSquare,
+    28→  Cpu,
+    29→  Key,
+    30→  Sparkles,
+    31→  Mic,
+    32→  Volume2,
+    33→  Globe,
+    34→  ImagePlus,
+    35→  CheckCircle2,
+    36→  XCircle,
+    37→  Wifi,
+    38→  WifiOff,
+    39→  Zap,
+    40→  RefreshCw,
+    41→} from "lucide-react";
+    42→import { usePengaturan } from "@/context/PengaturanContext";
+    43→import { Switch } from "@/components/ui/switch";
+    44→import {
+    45→  Select as SelectComponent,
+    46→  SelectContent,
+    47→  SelectItem,
+    48→  SelectTrigger,
+    49→  SelectValue,
+    50→} from "@/components/ui/select";
+    51→import type { SidebarVisibility, CopilotConfig, AiApiKeys } from "@/context/PengaturanContext";
+    52→import { DEFAULT_COPILOT_CONFIG, DEFAULT_AI_API_KEYS } from "@/context/PengaturanContext";
+    53→
+    54→interface PengaturanData {
+    55→  id: string;
+    56→  namaAplikasi: string;
+    57→  namaPemerintah: string;
+    58→  namaInstansi: string;
+    59→  warnaPrimary: string;
+    60→  warnaSecondary: string;
+    61→  warnaAccent: string;
+    62→  warnaDark: string;
+    63→  logoBase64: string | null;
+    64→  logoUrl: string | null;
+    65→  alamatInstansi: string | null;
+    66→  teleponInstansi: string | null;
+    67→  emailInstansi: string | null;
+    68→  websiteInstansi: string | null;
+    69→  sidebarConfig: SidebarVisibility | null;
+    70→  loaderType: string;
+    71→  loaderDisplayTime: number;
+    72→  loaderImageBase64: string | null;
+    73→  autoRefreshInterval: number;
+    74→  versiAplikasi: string;
+    75→  copilotConfig: CopilotConfig | null;
+    76→}
+    77→
+    78→const DEFAULT_SETTINGS: Omit<PengaturanData, "id"> = {
+    79→  namaAplikasi: "Dashboard Keuangan",
+    80→  namaPemerintah: "Pemerintah Kabupaten Seruyan",
+    81→  namaInstansi: "BKAD Kab. Seruyan",
+    82→  warnaPrimary: "#1B5E20",
+    83→  warnaSecondary: "#2E7D32",
+    84→  warnaAccent: "#F9A825",
+    85→  warnaDark: "#0D3B12",
+    86→  logoBase64: null,
+    87→  logoUrl: null,
+    88→  alamatInstansi: "",
+    89→  teleponInstansi: "",
+    90→  emailInstansi: "",
+    91→  websiteInstansi: "",
+    92→  sidebarConfig: {
+    93→    hiddenItems: {
+    94→      public: ["ringkasan-eksekutif", "copilot"],
+    95→    },
+    96→  },
+    97→  loaderType: "classic",
+    98→  loaderDisplayTime: 5000,
+    99→  loaderImageBase64: null,
+   100→  autoRefreshInterval: 0,
+   101→  versiAplikasi: "1.0.0",
+   102→  copilotConfig: null,
+   103→};
+   104→
+   105→// Available sidebar items for visibility configuration
+   106→const SIDEBAR_ITEMS = [
+   107→  { id: "dashboard", label: "Dashboard", group: "Utama" },
+   108→  { id: "ringkasan-eksekutif", label: "Ringkasan Eksekutif", group: "Utama" },
+   109→  { id: "analisis-risiko", label: "Analisis Risiko", group: "Utama" },
+   110→  { id: "copilot", label: "AI Copilot", group: "Utama" },
+   111→  { id: "apbd", label: "APBD", group: "Anggaran" },
+   112→  { id: "pendapatan", label: "Pendapatan", group: "Anggaran" },
+   113→  { id: "belanja", label: "Belanja", group: "Anggaran" },
+   114→  { id: "pembiayaan", label: "Pembiayaan", group: "Anggaran" },
+   115→  { id: "realisasi-akun", label: "Realisasi Per-Akun", group: "Realisasi" },
+   116→  { id: "realisasi-skpd", label: "Realisasi Per-SKPD", group: "Realisasi" },
+   117→  { id: "opd", label: "OPD", group: "Lainnya" },
+   118→  { id: "transparansi", label: "Transparansi", group: "Lainnya" },
+   119→  { id: "admin", label: "Admin", group: "Lainnya" },
+   120→] as const;
+   121→
+   122→// Roles that can have sidebar visibility configured
+   123→const ROLES = [
+   124→  { id: "public", label: "Publik", description: "Pengguna yang belum login (akses publik)" },
+   125→  { id: "admin", label: "Admin", description: "Administrator sistem" },
+   126→  { id: "superadmin", label: "Super Admin", description: "Super administrator" },
+   127→  { id: "opd", label: "OPD", description: "Organisasi Perangkat Daerah" },
+   128→  { id: "bupati", label: "Bupati/Kepala Daerah", description: "Pimpinan daerah" },
+   129→] as const;
+   130→
+   131→interface ColorFieldConfig {
+   132→  key: keyof PengaturanData;
+   133→  label: string;
+   134→  description: string;
+   135→}
+   136→
+   137→const COLOR_FIELDS: ColorFieldConfig[] = [
+   138→  { key: "warnaPrimary", label: "Warna Primer", description: "Sidebar & header utama" },
+   139→  { key: "warnaSecondary", label: "Warna Sekunder", description: "Gradient sekunder" },
+   140→  { key: "warnaAccent", label: "Warna Aksen", description: "Aksen emas (gold)" },
+   141→  { key: "warnaDark", label: "Warna Gelap", description: "Bayangan tergelap" },
+   142→];
+   143→
+   144→function isValidHexColor(color: string): boolean {
+   145→  return /^#[0-9A-Fa-f]{6}$/.test(color);
+   146→}
+   147→
+   148→function normalizeHex(value: string): string {
+   149→  let hex = value.trim();
+   150→  if (!hex.startsWith("#")) {
+   151→    hex = "#" + hex;
+   152→  }
+   153→  return hex;
+   154→}
+   155→
+   156→export default function SettingsManager() {
+   157→  const { toast } = useToast();
+   158→  const { pengaturan: currentPengaturan, logoSrc, refetch: refetchPengaturan } = usePengaturan();
+   159→  const fileInputRef = useRef<HTMLInputElement>(null);
+   160→  const loaderImageInputRef = useRef<HTMLInputElement>(null);
+   161→  const [loading, setLoading] = useState(true);
+   162→  const [saving, setSaving] = useState(false);
+   163→  const [form, setForm] = useState<Omit<PengaturanData, "id">>(DEFAULT_SETTINGS);
+   164→  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+   165→  const [logoSizeWarning, setLogoSizeWarning] = useState(false);
+   166→  const [loaderImagePreview, setLoaderImagePreview] = useState<string | null>(null);
+   167→  const [loaderImageSizeWarning, setLoaderImageSizeWarning] = useState(false);
+   168→  const [resettingSetup, setResettingSetup] = useState(false);
+   169→  const [activeSidebarRole, setActiveSidebarRole] = useState<string>("admin");
+   170→  const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
+   171→  const [testResults, setTestResults] = useState<Record<string, { status: 'success' | 'error' | 'loading'; message: string; latency?: number }> | null>(null);
+   172→  const [testingAll, setTestingAll] = useState(false);
+   173→
+   174→  // ─── Build test payload with current form values ────────────────────
+   175→  const buildTestPayload = () => {
+   176→    const copilotCfg = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+   177→    return {
+   178→      provider: copilotCfg.provider,
+   179→      apiKey: copilotCfg.apiKeys?.apiKey || '',
+   180→      baseUrl: copilotCfg.apiKeys?.baseUrl || '',
+   181→    };
+   182→  };
+   183→
+   184→  // ─── Test Connection ─────────────────────────────────────────────────
+   185→  const handleTestConnection = async (service: string) => {
+   186→    setTestResults((prev) => ({ ...prev, [service]: { status: 'loading', message: 'Menguji koneksi...' } }));
+   187→    try {
+   188→      const res = await fetch('/api/admin/test-ai-connection', {
+   189→        method: 'POST',
+   190→        headers: { 'Content-Type': 'application/json' },
+   191→        body: JSON.stringify({ services: [service], ...buildTestPayload() }),
+   192→      });
+   193→      const json = await res.json();
+   194→      if (json.results && json.results[0]) {
+   195→        const result = json.results[0];
+   196→        setTestResults((prev) => ({
+   197→          ...prev,
+   198→          [service]: {
+   199→            status: result.status === 'skipped' ? 'error' : result.status,
+   200→            message: result.message,
+   201→            latency: result.latency,
+   202→          },
+   203→        }));
+   204→      } else {
+   205→        setTestResults((prev) => ({ ...prev, [service]: { status: 'error', message: json.error || 'Gagal menguji koneksi' } }));
+   206→      }
+   207→    } catch (error) {
+   208→      setTestResults((prev) => ({ ...prev, [service]: { status: 'error', message: 'Gagal terhubung ke server' } }));
+   209→    }
+   210→  };
+   211→
+   212→  const handleTestAllConnections = async () => {
+   213→    setTestingAll(true);
+   214→    setTestResults(null);
+   215→
+   216→    const isZai = form.copilotConfig?.provider === 'z-ai';
+   217→    const services = isZai
+   218→      ? ['llm', 'vlm', 'tts', 'asr', 'imageGen', 'webSearch']
+   219→      : ['connection'];
+   220→
+   221→    // Set all to loading
+   222→    const loadingResults: Record<string, { status: 'loading'; message: string }> = {};
+   223→    for (const s of services) {
+   224→      loadingResults[s] = { status: 'loading', message: 'Menguji koneksi...' };
+   225→    }
+   226→    setTestResults(loadingResults);
+   227→
+   228→    try {
+   229→      const res = await fetch('/api/admin/test-ai-connection', {
+   230→        method: 'POST',
+   231→        headers: { 'Content-Type': 'application/json' },
+   232→        body: JSON.stringify({ services, ...buildTestPayload() }),
+   233→      });
+   234→      const json = await res.json();
+   235→      if (json.results) {
+   236→        const newResults: Record<string, { status: 'success' | 'error'; message: string; latency?: number }> = {};
+   237→        for (const result of json.results) {
+   238→          newResults[result.service] = {
+   239→            status: result.status === 'skipped' ? 'error' : result.status,
+   240→            message: result.message,
+   241→            latency: result.latency,
+   242→          };
+   243→        }
+   244→        setTestResults(newResults);
+   245→        // Show summary toast
+   246→        const successCount = json.results.filter((r: { status: string }) => r.status === 'success').length;
+   247→        toast({
+   248→          title: successCount === services.length ? 'Semua Koneksi Berhasil' : `${successCount}/${services.length} Koneksi Berhasil`,
+   249→          description: successCount === services.length
+   250→            ? isZai
+   251→              ? 'Semua layanan AI terhubung dengan baik'
+   252→              : 'Koneksi ke provider AI berhasil'
+   253→            : isZai
+   254→              ? 'Beberapa layanan AI gagal terhubung. Periksa hasil tes untuk detail.'
+   255→              : 'Koneksi ke provider AI gagal. Periksa API Key dan Base URL Anda.',
+   256→          variant: successCount === services.length ? 'default' : 'destructive',
+   257→        });
+   258→      }
+   259→    } catch (error) {
+   260→      setTestResults(null);
+   261→      toast({
+   262→        title: 'Error',
+   263→        description: 'Gagal menguji koneksi AI',
+   264→        variant: 'destructive',
+   265→      });
+   266→    } finally {
+   267→      setTestingAll(false);
+   268→    }
+   269→  };
+   270→
+   271→  const fetchSettings = useCallback(async () => {
+   272→    setLoading(true);
+   273→    try {
+   274→      const res = await fetch("/api/admin/pengaturan");
+   275→      if (!res.ok) throw new Error("Gagal mengambil pengaturan");
+   276→      const json = await res.json();
+   277→      const data: PengaturanData = json.data;
+   278→      // Parse sidebarConfig from JSON string
+   279→      let parsedSidebarConfig: SidebarVisibility | null = null;
+   280→      if (data.sidebarConfig && typeof data.sidebarConfig === "string") {
+   281→        try {
+   282→          parsedSidebarConfig = JSON.parse(data.sidebarConfig as unknown as string);
+   283→        } catch {
+   284→          parsedSidebarConfig = null;
+   285→        }
+   286→      } else if (data.sidebarConfig && typeof data.sidebarConfig === "object") {
+   287→        parsedSidebarConfig = data.sidebarConfig;
+   288→      }
+   289→      // If no sidebarConfig from DB, use default (hides ringkasan-eksekutif & copilot for public)
+   290→      if (!parsedSidebarConfig) {
+   291→        parsedSidebarConfig = DEFAULT_SETTINGS.sidebarConfig;
+   292→      }
+   293→      setForm({
+   294→        namaAplikasi: data.namaAplikasi || DEFAULT_SETTINGS.namaAplikasi,
+   295→        namaPemerintah: data.namaPemerintah || DEFAULT_SETTINGS.namaPemerintah,
+   296→        namaInstansi: data.namaInstansi || DEFAULT_SETTINGS.namaInstansi,
+   297→        warnaPrimary: data.warnaPrimary || DEFAULT_SETTINGS.warnaPrimary,
+   298→        warnaSecondary: data.warnaSecondary || DEFAULT_SETTINGS.warnaSecondary,
+   299→        warnaAccent: data.warnaAccent || DEFAULT_SETTINGS.warnaAccent,
+   300→        warnaDark: data.warnaDark || DEFAULT_SETTINGS.warnaDark,
+   301→        logoBase64: data.logoBase64 ?? null,
+   302→        logoUrl: data.logoUrl ?? null,
+   303→        alamatInstansi: data.alamatInstansi ?? "",
+   304→        teleponInstansi: data.teleponInstansi ?? "",
+   305→        emailInstansi: data.emailInstansi ?? "",
+   306→        websiteInstansi: data.websiteInstansi ?? "",
+   307→        sidebarConfig: parsedSidebarConfig,
+   308→        loaderType: data.loaderType || "classic",
+   309→        loaderDisplayTime: data.loaderDisplayTime ?? 5000,
+   310→        loaderImageBase64: data.loaderImageBase64 ?? null,
+   311→        autoRefreshInterval: data.autoRefreshInterval ?? 0,
+   312→        versiAplikasi: data.versiAplikasi || "1.0.0",
+   313→        copilotConfig: data.copilotConfig
+   314→          ? (typeof data.copilotConfig === "string"
+   315→            ? (() => {
+   316→              const parsed = JSON.parse(data.copilotConfig as unknown as string);
+   317→              // Migration: convert old per-service keys to single apiKey
+   318→              let migratedApiKeys = { ...DEFAULT_AI_API_KEYS, ...(parsed.apiKeys || {}) };
+   319→              if (!migratedApiKeys.apiKey && parsed.apiKeys) {
+   320→                const oldKeys = parsed.apiKeys as Record<string, string>;
+   321→                const firstKey = oldKeys.llm || oldKeys.vlm || oldKeys.tts || oldKeys.asr || oldKeys.imageGen || oldKeys.webSearch || '';
+   322→                if (firstKey) migratedApiKeys.apiKey = firstKey;
+   323→              }
+   324→              return { ...DEFAULT_COPILOT_CONFIG, ...parsed, apiKeys: migratedApiKeys };
+   325→            })()
+   326→            : typeof data.copilotConfig === "object"
+   327→              ? (() => {
+   328→                const rawConfig = data.copilotConfig as CopilotConfig;
+   329→                let migratedApiKeys = { ...DEFAULT_AI_API_KEYS, ...(rawConfig.apiKeys || {}) };
+   330→                if (!migratedApiKeys.apiKey && rawConfig.apiKeys) {
+   331→                  const oldKeys = rawConfig.apiKeys as unknown as Record<string, string>;
+   332→                  const firstKey = oldKeys.llm || oldKeys.vlm || oldKeys.tts || oldKeys.asr || oldKeys.imageGen || oldKeys.webSearch || '';
+   333→                  if (firstKey) migratedApiKeys.apiKey = firstKey;
+   334→                }
+   335→                return { ...DEFAULT_COPILOT_CONFIG, ...rawConfig, apiKeys: migratedApiKeys };
+   336→              })()
+   337→              : null)
+   338→          : null,
+   339→      });
+   340→      // Set logo preview
+   341→      if (data.logoBase64) {
+   342→        setLogoPreview(data.logoBase64);
+   343→      } else {
+   344→        setLogoPreview(null);
+   345→      }
+   346→      // Set loader image preview
+   347→      if (data.loaderImageBase64) {
+   348→        setLoaderImagePreview(data.loaderImageBase64);
+   349→      } else {
+   350→        setLoaderImagePreview(null);
+   351→      }
+   352→    } catch {
+   353→      toast({
+   354→        title: "Error",
+   355→        description: "Gagal mengambil data pengaturan",
+   356→        variant: "destructive",
+   357→      });
+   358→    } finally {
+   359→      setLoading(false);
+   360→    }
+   361→  }, [toast]);
+   362→
+   363→  useEffect(() => {
+   364→    fetchSettings();
+   365→  }, [fetchSettings]);
+   366→
+   367→  const handleFieldChange = (field: string, value: string | null) => {
+   368→    setForm((prev) => {
+   369→      if (field === "loaderDisplayTime" || field === "autoRefreshInterval") {
+   370→        return { ...prev, [field]: Number(value) || 0 };
+   371→      }
+   372→      return { ...prev, [field]: value };
+   373→    });
+   374→  };
+   375→
+   376→  const handleColorHexChange = (field: keyof PengaturanData, value: string) => {
+   377→    const normalized = normalizeHex(value);
+   378→    handleFieldChange(field, normalized);
+   379→  };
+   380→
+   381→  const handleColorPickerChange = (field: keyof PengaturanData, value: string) => {
+   382→    handleFieldChange(field, value);
+   383→  };
+   384→
+   385→  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   386→    const file = e.target.files?.[0];
+   387→    if (!file) return;
+   388→
+   389→    // Check file size (> 500KB warning)
+   390→    if (file.size > 500 * 1024) {
+   391→      setLogoSizeWarning(true);
+   392→    } else {
+   393→      setLogoSizeWarning(false);
+   394→    }
+   395→
+   396→    // Check if file is too large (> 1MB reject)
+   397→    if (file.size > 1024 * 1024) {
+   398→      toast({
+   399→        title: "File Terlalu Besar",
+   400→        description: "Ukuran logo maksimal 1MB. Pilih file yang lebih kecil.",
+   401→        variant: "destructive",
+   402→      });
+   403→      e.target.value = "";
+   404→      return;
+   405→    }
+   406→
+   407→    const reader = new FileReader();
+   408→    reader.onload = (event) => {
+   409→      const base64 = event.target?.result as string;
+   410→      setLogoPreview(base64);
+   411→      handleFieldChange("logoBase64", base64);
+   412→    };
+   413→    reader.readAsDataURL(file);
+   414→    e.target.value = "";
+   415→  };
+   416→
+   417→  const handleRemoveLogo = () => {
+   418→    setLogoPreview(null);
+   419→    handleFieldChange("logoBase64", null);
+   420→    handleFieldChange("logoUrl", null);
+   421→    setLogoSizeWarning(false);
+   422→  };
+   423→
+   424→  // Loader image upload handlers
+   425→  const handleLoaderImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   426→    const file = e.target.files?.[0];
+   427→    if (!file) return;
+   428→
+   429→    // Check file size (> 500KB warning)
+   430→    if (file.size > 500 * 1024) {
+   431→      setLoaderImageSizeWarning(true);
+   432→    } else {
+   433→      setLoaderImageSizeWarning(false);
+   434→    }
+   435→
+   436→    // Check if file is too large (> 2MB reject — GIFs can be bigger)
+   437→    if (file.size > 2 * 1024 * 1024) {
+   438→      toast({
+   439→        title: "File Terlalu Besar",
+   440→        description: "Ukuran gambar loader maksimal 2MB. Pilih file yang lebih kecil.",
+   441→        variant: "destructive",
+   442→      });
+   443→      e.target.value = "";
+   444→      return;
+   445→    }
+   446→
+   447→    const reader = new FileReader();
+   448→    reader.onload = (event) => {
+   449→      const base64 = event.target?.result as string;
+   450→      setLoaderImagePreview(base64);
+   451→      handleFieldChange("loaderImageBase64", base64);
+   452→    };
+   453→    reader.readAsDataURL(file);
+   454→    e.target.value = "";
+   455→  };
+   456→
+   457→  const handleRemoveLoaderImage = () => {
+   458→    setLoaderImagePreview(null);
+   459→    handleFieldChange("loaderImageBase64", null);
+   460→    setLoaderImageSizeWarning(false);
+   461→  };
+   462→
+   463→  // Sidebar visibility toggle handler
+   464→  const handleSidebarToggle = (itemId: string, roleId: string, visible: boolean) => {
+   465→    const currentConfig = form.sidebarConfig || { hiddenItems: {} };
+   466→    const hiddenItems = { ...currentConfig.hiddenItems };
+   467→    const currentHidden = hiddenItems[roleId] || [];
+   468→
+   469→    if (visible) {
+   470→      // Remove from hidden list
+   471→      hiddenItems[roleId] = currentHidden.filter((id) => id !== itemId);
+   472→    } else {
+   473→      // Add to hidden list
+   474→      hiddenItems[roleId] = [...currentHidden, itemId];
+   475→    }
+   476→
+   477→    // Clean up empty arrays
+   478→    if (hiddenItems[roleId]?.length === 0) {
+   479→      delete hiddenItems[roleId];
+   480→    }
+   481→
+   482→    const newConfig: SidebarVisibility = { hiddenItems };
+   483→    setForm((prev) => ({ ...prev, sidebarConfig: newConfig }));
+   484→  };
+   485→
+   486→  // Check if a sidebar item is visible for a role
+   487→  const isSidebarItemVisible = (itemId: string, roleId: string): boolean => {
+   488→    const hiddenItems = form.sidebarConfig?.hiddenItems || {};
+   489→    const roleHidden = hiddenItems[roleId] || [];
+   490→    return !roleHidden.includes(itemId);
+   491→  };
+   492→
+   493→  // Select all / Deselect all for a role
+   494→  const handleSelectAllForRole = (roleId: string, visible: boolean) => {
+   495→    const currentConfig = form.sidebarConfig || { hiddenItems: {} };
+   496→    const hiddenItems = { ...currentConfig.hiddenItems };
+   497→
+   498→    if (visible) {
+   499→      // Show all: remove all items from hidden
+   500→      hiddenItems[roleId] = [];
+   501→    } else {
+   502→      // Hide all: add all items to hidden
+   503→      hiddenItems[roleId] = SIDEBAR_ITEMS.map((item) => item.id);
+   504→    }
+   505→
+   506→    // Clean up empty arrays
+   507→    if (hiddenItems[roleId]?.length === 0) {
+   508→      delete hiddenItems[roleId];
+   509→    }
+   510→
+   511→    const newConfig: SidebarVisibility = { hiddenItems };
+   512→    setForm((prev) => ({ ...prev, sidebarConfig: newConfig }));
+   513→  };
+   514→
+   515→  const handleSave = async () => {
+   516→    // Validate colors
+   517→    for (const cf of COLOR_FIELDS) {
+   518→      const value = form[cf.key] as string;
+   519→      if (!isValidHexColor(value)) {
+   520→        toast({
+   521→          title: "Format Warna Tidak Valid",
+   522→          description: `${cf.label} harus dalam format #RRGGBB`,
+   523→          variant: "destructive",
+   524→        });
+   525→        return;
+   526→      }
+   527→    }
+   528→
+   529→    setSaving(true);
+   530→    try {
+   531→      const payload = { ...form };
+   532→      // sidebarConfig is sent as object, the API will stringify it
+   533→      const res = await fetch("/api/admin/pengaturan", {
+   534→        method: "PUT",
+   535→        headers: { "Content-Type": "application/json" },
+   536→        body: JSON.stringify(payload),
+   537→      });
+   538→
+   539→      if (!res.ok) {
+   540→        const json = await res.json();
+   541→        throw new Error(json.error || "Gagal menyimpan pengaturan");
+   542→      }
+   543→
+   544→      toast({
+   545→        title: "Berhasil",
+   546→        description: "Pengaturan berhasil disimpan",
+   547→      });
+   548→
+   549→      // Refresh the global theme context
+   550→      refetchPengaturan();
+   551→    } catch (error) {
+   552→      toast({
+   553→        title: "Error",
+   554→        description: error instanceof Error ? error.message : "Gagal menyimpan pengaturan",
+   555→        variant: "destructive",
+   556→      });
+   557→    } finally {
+   558→      setSaving(false);
+   559→    }
+   560→  };
+   561→
+   562→  if (loading) {
+   563→    return (
+   564→      <div className="flex items-center justify-center py-20">
+   565→        <Loader2 className="w-8 h-8 animate-spin" style={{ color: currentPengaturan.warnaPrimary }} />
+   566→        <span className="ml-3 text-muted-foreground">Memuat pengaturan...</span>
+   567→      </div>
+   568→    );
+   569→  }
+   570→
+   571→  return (
+   572→    <div className="space-y-6">
+   573→      {/* Section 1: Identitas Aplikasi */}
+   574→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaPrimary }}>
+   575→        <CardHeader className="pb-4">
+   576→          <CardTitle className="flex items-center gap-2 text-base">
+   577→            <Info className="w-5 h-5" style={{ color: currentPengaturan.warnaPrimary }} />
+   578→            Identitas Aplikasi
+   579→          </CardTitle>
+   580→        </CardHeader>
+   581→        <CardContent className="space-y-4">
+   582→          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   583→            <div className="space-y-2">
+   584→              <Label htmlFor="namaAplikasi">Nama Aplikasi</Label>
+   585→              <Input
+   586→                id="namaAplikasi"
+   587→                value={form.namaAplikasi}
+   588→                onChange={(e) => handleFieldChange("namaAplikasi", e.target.value)}
+   589→                placeholder="Dashboard Keuangan"
+   590→              />
+   591→            </div>
+   592→            <div className="space-y-2">
+   593→              <Label htmlFor="namaPemerintah">Nama Pemerintah</Label>
+   594→              <Input
+   595→                id="namaPemerintah"
+   596→                value={form.namaPemerintah}
+   597→                onChange={(e) => handleFieldChange("namaPemerintah", e.target.value)}
+   598→                placeholder="Pemerintah Kabupaten Seruyan"
+   599→              />
+   600→            </div>
+   601→            <div className="space-y-2">
+   602→              <Label htmlFor="namaInstansi">Nama Instansi</Label>
+   603→              <Input
+   604→                id="namaInstansi"
+   605→                value={form.namaInstansi}
+   606→                onChange={(e) => handleFieldChange("namaInstansi", e.target.value)}
+   607→                placeholder="BKAD Kab. Seruyan"
+   608→              />
+   609→              <p className="text-xs text-muted-foreground">Nama instansi/OPD pengelola yang ditampilkan di sidebar, halaman login, dan homepage</p>
+   610→            </div>
+   611→          </div>
+   612→        </CardContent>
+   613→      </Card>
+   614→
+   615→      {/* Section 2: Tema & Warna */}
+   616→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaSecondary }}>
+   617→        <CardHeader className="pb-4">
+   618→          <CardTitle className="flex items-center gap-2 text-base">
+   619→            <Palette className="w-5 h-5" style={{ color: currentPengaturan.warnaSecondary }} />
+   620→            Tema & Warna
+   621→          </CardTitle>
+   622→        </CardHeader>
+   623→        <CardContent className="space-y-4">
+   624→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   625→            {COLOR_FIELDS.map((cf) => {
+   626→              const colorValue = form[cf.key] as string;
+   627→              const isValid = isValidHexColor(colorValue);
+   628→              return (
+   629→                <div key={cf.key} className="space-y-1.5">
+   630→                  <div className="flex items-center justify-between">
+   631→                    <Label className="text-sm font-medium">{cf.label}</Label>
+   632→                    <span className="text-xs text-muted-foreground">{cf.description}</span>
+   633→                  </div>
+   634→                  <div className="flex items-center gap-2">
+   635→                    {/* Color swatch that triggers the hidden color picker */}
+   636→                    <button
+   637→                      type="button"
+   638→                      className="w-10 h-10 rounded-lg border-2 border-border shadow-sm transition-transform hover:scale-110 shrink-0"
+   639→                      style={{
+   640→                        backgroundColor: isValid ? colorValue : "#cccccc",
+   641→                      }}
+   642→                      onClick={() => {
+   643→                        const picker = document.getElementById(`picker-${cf.key}`);
+   644→                        picker?.click();
+   645→                      }}
+   646→                      title="Pilih warna"
+   647→                      aria-label={`Pilih ${cf.label}`}
+   648→                    />
+   649→                    {/* Hidden native color picker */}
+   650→                    <input
+   651→                      id={`picker-${cf.key}`}
+   652→                      type="color"
+   653→                      value={isValid ? colorValue : "#000000"}
+   654→                      onChange={(e) => handleColorPickerChange(cf.key, e.target.value)}
+   655→                      className="w-0 h-0 opacity-0 absolute"
+   656→                      tabIndex={-1}
+   657→                      aria-hidden="true"
+   658→                    />
+   659→                    {/* Hex input */}
+   660→                    <Input
+   661→                      value={colorValue}
+   662→                      onChange={(e) => handleColorHexChange(cf.key, e.target.value)}
+   663→                      placeholder="#000000"
+   664→                      className={`font-mono text-sm ${!isValid ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+   665→                      maxLength={7}
+   666→                      aria-label={`${cf.label} kode hex`}
+   667→                    />
+   668→                  </div>
+   669→                  {!isValid && (
+   670→                    <p className="text-xs text-red-500">Format tidak valid, gunakan #RRGGBB</p>
+   671→                  )}
+   672→                </div>
+   673→              );
+   674→            })}
+   675→          </div>
+   676→
+   677→          {/* Theme Preview */}
+   678→          <div className="mt-6 p-4 rounded-xl border bg-muted/30">
+   679→            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
+   680→              Pratinjau Tema
+   681→            </p>
+   682→            <div className="flex gap-3 items-stretch">
+   683→              {/* Mini Sidebar Mockup */}
+   684→              <div
+   685→                className="w-20 rounded-lg overflow-hidden flex flex-col shrink-0"
+   686→                style={{ backgroundColor: form.warnaDark }}
+   687→              >
+   688→                <div
+   689→                  className="px-2 py-2 flex items-center gap-1.5"
+   690→                  style={{ backgroundColor: form.warnaPrimary }}
+   691→                >
+   692→                  <div className="w-4 h-4 rounded-full bg-white/30" />
+   693→                  <div className="h-2 w-8 rounded bg-white/50" />
+   694→                </div>
+   695→                <div className="flex-1 py-2 px-1.5 space-y-1.5">
+   696→                  {[1, 2, 3, 4].map((i) => (
+   697→                    <div
+   698→                      key={i}
+   699→                      className="flex items-center gap-1.5 px-1.5 py-1 rounded"
+   700→                      style={{
+   701→                        backgroundColor: i === 1 ? "rgba(255,255,255,0.15)" : "transparent",
+   702→                      }}
+   703→                    >
+   704→                      <div
+   705→                        className="w-2.5 h-2.5 rounded-sm"
+   706→                        style={{
+   707→                          backgroundColor: i === 1 ? form.warnaAccent : "rgba(255,255,255,0.4)",
+   708→                        }}
+   709→                      />
+   710→                      <div
+   711→                        className="h-1.5 rounded"
+   712→                        style={{
+   713→                          width: i === 1 ? "28px" : "22px",
+   714→                          backgroundColor: i === 1 ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.25)",
+   715→                        }}
+   716→                      />
+   717→                    </div>
+   718→                  ))}
+   719→                </div>
+   720→              </div>
+   721→
+   722→              {/* Mini Content Area Mockup */}
+   723→              <div className="flex-1 rounded-lg overflow-hidden border bg-white">
+   724→                {/* Header bar */}
+   725→                <div
+   726→                  className="px-3 py-2 flex items-center justify-between"
+   727→                  style={{ backgroundColor: form.warnaPrimary }}
+   728→                >
+   729→                  <div className="h-2 w-16 rounded bg-white/50" />
+   730→                  <div
+   731→                    className="h-2 w-8 rounded"
+   732→                    style={{ backgroundColor: "rgba(255,255,255,0.4)" }}
+   733→                  />
+   734→                </div>
+   735→                {/* Content area */}
+   736→                <div className="p-2 space-y-2">
+   737→                  <div className="flex gap-1.5">
+   738→                    {[
+   739→                      form.warnaPrimary,
+   740→                      form.warnaSecondary,
+   741→                      form.warnaAccent,
+   742→                    ].map((color, i) => (
+   743→                      <div
+   744→                        key={i}
+   745→                        className="flex-1 h-8 rounded"
+   746→                        style={{ backgroundColor: color, opacity: 0.15 + i * 0.1 }}
+   747→                      />
+   748→                    ))}
+   749→                  </div>
+   750→                  <div className="flex gap-1.5">
+   751→                    <div
+   752→                      className="h-6 flex-1 rounded"
+   753→                      style={{ backgroundColor: form.warnaSecondary, opacity: 0.1 }}
+   754→                    />
+   755→                    <div
+   756→                      className="h-6 w-1/3 rounded"
+   757→                      style={{ backgroundColor: form.warnaAccent, opacity: 0.2 }}
+   758→                    />
+   759→                  </div>
+   760→                  {/* Accent bar */}
+   761→                  <div
+   762→                    className="h-1.5 w-full rounded"
+   763→                    style={{ backgroundColor: form.warnaAccent, opacity: 0.6 }}
+   764→                  />
+   765→                </div>
+   766→              </div>
+   767→            </div>
+   768→
+   769→            {/* Color swatches summary */}
+   770→            <div className="flex items-center gap-2 mt-3">
+   771→              {COLOR_FIELDS.map((cf) => (
+   772→                <div key={cf.key} className="flex items-center gap-1.5">
+   773→                  <div
+   774→                    className="w-4 h-4 rounded border border-border"
+   775→                    style={{ backgroundColor: form[cf.key] as string }}
+   776→                  />
+   777→                  <span className="text-xs text-muted-foreground">{cf.label}</span>
+   778→                </div>
+   779→              ))}
+   780→            </div>
+   781→          </div>
+   782→        </CardContent>
+   783→      </Card>
+   784→
+   785→      {/* Section 3: Logo Aplikasi */}
+   786→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaAccent }}>
+   787→        <CardHeader className="pb-4">
+   788→          <CardTitle className="flex items-center gap-2 text-base">
+   789→            <ImageIcon className="w-5 h-5" style={{ color: currentPengaturan.warnaAccent }} />
+   790→            Logo Aplikasi
+   791→          </CardTitle>
+   792→        </CardHeader>
+   793→        <CardContent className="space-y-4">
+   794→          <div className="flex flex-col sm:flex-row gap-4 items-start">
+   795→            {/* Logo Preview */}
+   796→            <div className="flex items-center justify-center w-32 h-32 rounded-xl border-2 border-dashed border-border bg-muted/30 shrink-0 overflow-hidden">
+   797→              {logoPreview ? (
+   798→                <img
+   799→                  src={logoPreview}
+   800→                  alt="Logo Preview"
+   801→                  className="max-w-full max-h-full object-contain p-2"
+   802→                />
+   803→              ) : (
+   804→                <img
+   805→                  src={logoSrc}
+   806→                  alt="Logo Default"
+   807→                  className="max-w-full max-h-full object-contain p-2"
+   808→                />
+   809→              )}
+   810→            </div>
+   811→
+   812→            {/* Upload Controls */}
+   813→            <div className="flex-1 space-y-3">
+   814→              <div className="space-y-2">
+   815→                <Label>Upload Logo Baru</Label>
+   816→                <p className="text-xs text-muted-foreground">
+   817→                  Format: PNG, JPG, SVG, atau GIF. Maksimal 1MB. Animasi GIF didukung.
+   818→                </p>
+   819→                <input
+   820→                  ref={fileInputRef}
+   821→                  type="file"
+   822→                  accept="image/png,image/jpeg,image/svg+xml,image/gif"
+   823→                  onChange={handleLogoUpload}
+   824→                  className="hidden"
+   825→                  aria-label="Upload logo"
+   826→                />
+   827→                <div className="flex gap-2">
+   828→                  <Button
+   829→                    type="button"
+   830→                    variant="outline"
+   831→                    size="sm"
+   832→                    onClick={() => fileInputRef.current?.click()}
+   833→                    className="gap-1.5"
+   834→                  >
+   835→                    <Upload className="w-4 h-4" />
+   836→                    Pilih File
+   837→                  </Button>
+   838→                  {(logoPreview || form.logoBase64) && (
+   839→                    <Button
+   840→                      type="button"
+   841→                      variant="outline"
+   842→                      size="sm"
+   843→                      onClick={handleRemoveLogo}
+   844→                      className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+   845→                    >
+   846→                      <Trash2 className="w-4 h-4" />
+   847→                      Hapus Logo
+   848→                    </Button>
+   849→                  )}
+   850→                </div>
+   851→              </div>
+   852→              {logoSizeWarning && (
+   853→                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700">
+   854→                  <span className="text-sm">
+   855→                    ⚠️ Ukuran file melebihi 500KB. Ini dapat memperlambat pemuatan halaman.
+   856→                  </span>
+   857→                </div>
+   858→              )}
+   859→              {logoPreview && (
+   860→                <p className="text-xs text-muted-foreground">
+   861→                  ✅ Logo baru akan diterapkan setelah disimpan
+   862→                </p>
+   863→              )}
+   864→            </div>
+   865→          </div>
+   866→        </CardContent>
+   867→      </Card>
+   868→
+   869→      {/* Section 4: Informasi Instansi */}
+   870→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaDark }}>
+   871→        <CardHeader className="pb-4">
+   872→          <CardTitle className="flex items-center gap-2 text-base">
+   873→            <Building2 className="w-5 h-5" style={{ color: currentPengaturan.warnaDark }} />
+   874→            Informasi Instansi
+   875→          </CardTitle>
+   876→        </CardHeader>
+   877→        <CardContent className="space-y-4">
+   878→          <div className="space-y-2">
+   879→            <Label htmlFor="alamatInstansi">Alamat Instansi</Label>
+   880→            <Input
+   881→              id="alamatInstansi"
+   882→              value={form.alamatInstansi || ""}
+   883→              onChange={(e) => handleFieldChange("alamatInstansi", e.target.value)}
+   884→              placeholder="Jl. ..."
+   885→            />
+   886→          </div>
+   887→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   888→            <div className="space-y-2">
+   889→              <Label htmlFor="teleponInstansi">Telepon</Label>
+   890→              <Input
+   891→                id="teleponInstansi"
+   892→                value={form.teleponInstansi || ""}
+   893→                onChange={(e) => handleFieldChange("teleponInstansi", e.target.value)}
+   894→                placeholder="+62 ..."
+   895→              />
+   896→            </div>
+   897→            <div className="space-y-2">
+   898→              <Label htmlFor="emailInstansi">Email</Label>
+   899→              <Input
+   900→                id="emailInstansi"
+   901→                type="email"
+   902→                value={form.emailInstansi || ""}
+   903→                onChange={(e) => handleFieldChange("emailInstansi", e.target.value)}
+   904→                placeholder="email@seruyankab.go.id"
+   905→              />
+   906→            </div>
+   907→            <div className="space-y-2">
+   908→              <Label htmlFor="websiteInstansi">Website</Label>
+   909→              <Input
+   910→                id="websiteInstansi"
+   911→                value={form.websiteInstansi || ""}
+   912→                onChange={(e) => handleFieldChange("websiteInstansi", e.target.value)}
+   913→                placeholder="https://seruyankab.go.id"
+   914→              />
+   915→            </div>
+   916→          </div>
+   917→        </CardContent>
+   918→      </Card>
+   919→
+   920→      {/* Section 5: Tampilan Sidebar */}
+   921→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaAccent }}>
+   922→        <CardHeader className="pb-4">
+   923→          <CardTitle className="flex items-center gap-2 text-base">
+   924→            <LayoutList className="w-5 h-5" style={{ color: currentPengaturan.warnaAccent }} />
+   925→            Tampilan Sidebar per Role
+   926→          </CardTitle>
+   927→          <p className="text-sm text-muted-foreground mt-1">
+   928→            Atur menu sidebar mana yang tampil untuk setiap role. Item yang tidak dicentang akan disembunyikan dari sidebar untuk role tersebut.
+   929→          </p>
+   930→        </CardHeader>
+   931→        <CardContent className="space-y-4">
+   932→          {/* Role tabs */}
+   933→          <div className="flex flex-wrap gap-2">
+   934→            {ROLES.map((role) => {
+   935→              const hiddenCount = (form.sidebarConfig?.hiddenItems?.[role.id] || []).length;
+   936→              const allVisible = hiddenCount === 0;
+   937→              return (
+   938→                <button
+   939→                  key={role.id}
+   940→                  onClick={() => setActiveSidebarRole(role.id)}
+   941→                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+   942→                    activeSidebarRole === role.id
+   943→                      ? "border-current shadow-sm"
+   944→                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+   945→                  }`}
+   946→                  style={
+   947→                    activeSidebarRole === role.id
+   948→                      ? { backgroundColor: `${currentPengaturan.warnaPrimary}10`, color: currentPengaturan.warnaPrimary, borderColor: `${currentPengaturan.warnaPrimary}40` }
+   949→                      : undefined
+   950→                  }
+   951→                >
+   952→                  {role.label}
+   953→                  {!allVisible && (
+   954→                    <span className="text-[10px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5 font-semibold">
+   955→                      {SIDEBAR_ITEMS.length - hiddenCount}/{SIDEBAR_ITEMS.length}
+   956→                    </span>
+   957→                  )}
+   958→                  {allVisible && (
+   959→                    <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0.5 font-semibold">
+   960→                      Semua
+   961→                    </span>
+   962→                  )}
+   963→                </button>
+   964→              );
+   965→            })}
+   966→          </div>
+   967→
+   968→          {/* Active role description */}
+   969→          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+   970→            <Info className="w-3.5 h-3.5 shrink-0" />
+   971→            <span>
+   972→              {ROLES.find((r) => r.id === activeSidebarRole)?.description} — 
+   973→              Item yang tidak dicentang akan tersembunyi untuk role <strong>{ROLES.find((r) => r.id === activeSidebarRole)?.label}</strong>
+   974→            </span>
+   975→          </div>
+   976→
+   977→          {/* Select all / Deselect all */}
+   978→          <div className="flex items-center gap-2">
+   979→            <Button
+   980→              variant="outline"
+   981→              size="sm"
+   982→              onClick={() => handleSelectAllForRole(activeSidebarRole, true)}
+   983→              className="gap-1.5 text-xs"
+   984→            >
+   985→              <Eye className="w-3.5 h-3.5" />
+   986→              Tampilkan Semua
+   987→            </Button>
+   988→            <Button
+   989→              variant="outline"
+   990→              size="sm"
+   991→              onClick={() => handleSelectAllForRole(activeSidebarRole, false)}
+   992→              className="gap-1.5 text-xs"
+   993→            >
+   994→              <EyeOff className="w-3.5 h-3.5" />
+   995→              Sembunyikan Semua
+   996→            </Button>
+   997→          </div>
+   998→
+   999→          {/* Sidebar items grid */}
+  1000→          <div className="space-y-3">
+  1001→            {(() => {
+  1002→              const groups = [...new Set(SIDEBAR_ITEMS.map((item) => item.group))];
+  1003→              return groups.map((group) => (
+  1004→                <div key={group}>
+  1005→                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+  1006→                    {group}
+  1007→                  </p>
+  1008→                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+  1009→                    {SIDEBAR_ITEMS.filter((item) => item.group === group).map((item) => {
+  1010→                      const visible = isSidebarItemVisible(item.id, activeSidebarRole);
+  1011→                      return (
+  1012→                        <div
+  1013→                          key={item.id}
+  1014→                          className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all ${
+  1015→                            visible
+  1016→                              ? "border-emerald-200 bg-emerald-50/50"
+  1017→                              : "border-border bg-muted/30"
+  1018→                          }`}
+  1019→                        >
+  1020→                          <Switch
+  1021→                            checked={visible}
+  1022→                            onCheckedChange={(checked) =>
+  1023→                              handleSidebarToggle(item.id, activeSidebarRole, checked)
+  1024→                            }
+  1025→                            className="data-[state=checked]:bg-emerald-500"
+  1026→                          />
+  1027→                          <div className="flex-1 min-w-0">
+  1028→                            <p className={`text-sm font-medium ${visible ? "text-foreground" : "text-muted-foreground line-through"}`}>
+  1029→                              {item.label}
+  1030→                            </p>
+  1031→                          </div>
+  1032→                          {visible ? (
+  1033→                            <Eye className="w-4 h-4 text-emerald-500 shrink-0" />
+  1034→                          ) : (
+  1035→                            <EyeOff className="w-4 h-4 text-muted-foreground shrink-0" />
+  1036→                          )}
+  1037→                        </div>
+  1038→                      );
+  1039→                    })}
+  1040→                  </div>
+  1041→                </div>
+  1042→              ));
+  1043→            })()}
+  1044→          </div>
+  1045→        </CardContent>
+  1046→      </Card>
+  1047→
+  1048→      {/* Section 6: Loader Display Time */}
+  1049→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaPrimary }}>
+  1050→        <CardHeader className="pb-4">
+  1051→          <CardTitle className="flex items-center gap-2 text-base">
+  1052→            <Activity className="w-5 h-5" style={{ color: currentPengaturan.warnaPrimary }} />
+  1053→            Pengaturan Loader
+  1054→          </CardTitle>
+  1055→          <p className="text-sm text-muted-foreground mt-1">
+  1056→            Pilih gaya loader dan atur berapa lama animasi loader ditampilkan saat memuat data dashboard.
+  1057→          </p>
+  1058→        </CardHeader>
+  1059→        <CardContent className="space-y-4">
+  1060→          {/* Loader Type Selector */}
+  1061→          <div className="space-y-3">
+  1062→            <Label className="text-sm font-semibold">Gaya Loader</Label>
+  1063→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1064→              {/* Classic Loader Option */}
+  1065→              <button
+  1066→                type="button"
+  1067→                onClick={() => handleFieldChange("loaderType", "classic")}
+  1068→                className={`relative flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all text-left ${
+  1069→                  form.loaderType === "classic"
+  1070→                    ? "border-current shadow-md"
+  1071→                    : "border-border hover:border-foreground/30"
+  1072→                }`}
+  1073→                style={
+  1074→                  form.loaderType === "classic"
+  1075→                    ? { backgroundColor: `${currentPengaturan.warnaPrimary}08`, borderColor: `${currentPengaturan.warnaPrimary}60`, color: currentPengaturan.warnaPrimary }
+  1076→                    : undefined
+  1077→                }
+  1078→              >
+  1079→                {/* Selected indicator */}
+  1080→                {form.loaderType === "classic" && (
+  1081→                  <div
+  1082→                    className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+  1083→                    style={{ backgroundColor: currentPengaturan.warnaPrimary }}
+  1084→                  >
+  1085→                    ✓
+  1086→                  </div>
+  1087→                )}
+  1088→                {/* Mini preview of classic loader */}
+  1089→                <div className="w-16 h-16 rounded-xl bg-slate-950 flex items-center justify-center relative overflow-hidden">
+  1090→                  <div className="absolute h-10 w-10 border-2 border-emerald-500/30 rounded-full" style={{ animation: "spin 3s linear infinite" }} />
+  1091→                  <span className="text-xl relative z-10">📊</span>
+  1092→                </div>
+  1093→                <div className="text-center">
+  1094→                  <p className="text-sm font-bold text-foreground">Loader Klasik</p>
+  1095→                  <p className="text-[11px] text-muted-foreground mt-0.5">Tampilan lama dengan lingkaran progress</p>
+  1096→                </div>
+  1097→              </button>
+  1098→
+  1099→              {/* Modern Loader Option */}
+  1100→              <button
+  1101→                type="button"
+  1102→                onClick={() => handleFieldChange("loaderType", "modern")}
+  1103→                className={`relative flex flex-col items-center gap-3 rounded-xl border-2 p-4 transition-all text-left ${
+  1104→                  form.loaderType === "modern"
+  1105→                    ? "border-current shadow-md"
+  1106→                    : "border-border hover:border-foreground/30"
+  1107→                }`}
+  1108→                style={
+  1109→                  form.loaderType === "modern"
+  1110→                    ? { backgroundColor: `${currentPengaturan.warnaPrimary}08`, borderColor: `${currentPengaturan.warnaPrimary}60`, color: currentPengaturan.warnaPrimary }
+  1111→                    : undefined
+  1112→                }
+  1113→              >
+  1114→                {/* Selected indicator */}
+  1115→                {form.loaderType === "modern" && (
+  1116→                  <div
+  1117→                    className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs"
+  1118→                    style={{ backgroundColor: currentPengaturan.warnaPrimary }}
+  1119→                  >
+  1120→                    ✓
+  1121→                  </div>
+  1122→                )}
+  1123→                {/* Mini preview of modern loader */}
+  1124→                <div
+  1125→                  className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden"
+  1126→                  style={{ background: `linear-gradient(135deg, ${currentPengaturan.warnaDark}, ${currentPengaturan.warnaPrimary})` }}
+  1127→                >
+  1128→                  <div className="absolute h-12 w-12 border border-dashed rounded-full" style={{ borderColor: `${currentPengaturan.warnaAccent}40`, animation: "spin 4s linear infinite" }} />
+  1129→                  <img
+  1130→                    src={logoSrc}
+  1131→                    alt=""
+  1132→                    width={24}
+  1133→                    height={24}
+  1134→                    className="relative z-10 object-contain"
+  1135→                  />
+  1136→                </div>
+  1137→                <div className="text-center">
+  1138→                  <p className="text-sm font-bold text-foreground">Loader Modern</p>
+  1139→                  <p className="text-[11px] text-muted-foreground mt-0.5">Tampilan baru dengan orbit animasi & logo</p>
+  1140→                </div>
+  1141→              </button>
+  1142→            </div>
+  1143→
+  1144→            {/* Description based on selected type */}
+  1145→            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40">
+  1146→              <Activity className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+  1147→              <div className="text-xs text-muted-foreground">
+  1148→                {form.loaderType === "modern" ? (
+  1149→                  <>
+  1150→                    <p className="font-medium text-foreground/80">Loader Modern (SplashLoader)</p>
+  1151→                    <p>Menampilkan logo instansi dengan animasi orbit, progress bar, dan nama pemerintah. Cocok untuk tampilan profesional dan formal.</p>
+  1152→                  </>
+  1153→                ) : (
+  1154→                  <>
+  1155→                    <p className="font-medium text-foreground/80">Loader Klasik (BudgetLoader)</p>
+  1156→                    <p>Menampilkan lingkaran progress dengan persentase dan ikon/gambar di tengah. Mendukung upload GIF animasi.</p>
+  1157→                  </>
+  1158→                )}
+  1159→              </div>
+  1160→            </div>
+  1161→          </div>
+  1162→
+  1163→          <div className="border-t pt-4" />
+  1164→          <div className="flex items-center gap-6">
+  1165→            <div className="flex-1 space-y-3">
+  1166→              <div className="flex items-center justify-between">
+  1167→                <Label>Durasi Tampil Loader</Label>
+  1168→                <span className="text-2xl font-bold tabular-nums" style={{ color: currentPengaturan.warnaPrimary }}>
+  1169→                  {(form.loaderDisplayTime / 1000).toFixed(1)}s
+  1170→                </span>
+  1171→              </div>
+  1172→              <input
+  1173→                type="range"
+  1174→                min={0}
+  1175→                max={10000}
+  1176→                step={500}
+  1177→                value={form.loaderDisplayTime}
+  1178→                onChange={(e) => handleFieldChange("loaderDisplayTime", e.target.value)}
+  1179→                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-emerald-600"
+  1180→                style={{
+  1181→                  background: `linear-gradient(to right, ${currentPengaturan.warnaPrimary} 0%, ${currentPengaturan.warnaPrimary} ${(form.loaderDisplayTime / 10000) * 100}%, #e2e8f0 ${(form.loaderDisplayTime / 10000) * 100}%, #e2e8f0 100%)`,
+  1182→                }}
+  1183→              />
+  1184→              <div className="flex justify-between text-xs text-muted-foreground">
+  1185→                <span>0s (Nonaktif)</span>
+  1186→                <span>5s</span>
+  1187→                <span>10s</span>
+  1188→              </div>
+  1189→            </div>
+  1190→          </div>
+  1191→
+  1192→          {/* Quick presets */}
+  1193→          <div className="flex flex-wrap gap-2">
+  1194→            {[
+  1195→              { ms: 0, label: "Nonaktif" },
+  1196→              { ms: 1500, label: "1.5 detik" },
+  1197→              { ms: 3000, label: "3 detik" },
+  1198→              { ms: 5000, label: "5 detik" },
+  1199→              { ms: 8000, label: "8 detik" },
+  1200→              { ms: 10000, label: "10 detik" },
+  1201→            ].map((preset) => (
+  1202→              <button
+  1203→                key={preset.ms}
+  1204→                onClick={() => handleFieldChange("loaderDisplayTime", String(preset.ms))}
+  1205→                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+  1206→                  form.loaderDisplayTime === preset.ms
+  1207→                    ? "border-current shadow-sm"
+  1208→                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+  1209→                }`}
+  1210→                style={
+  1211→                  form.loaderDisplayTime === preset.ms
+  1212→                    ? { backgroundColor: `${currentPengaturan.warnaPrimary}10`, color: currentPengaturan.warnaPrimary, borderColor: `${currentPengaturan.warnaPrimary}40` }
+  1213→                    : undefined
+  1214→                }
+  1215→              >
+  1216→                {preset.label}
+  1217→              </button>
+  1218→            ))}
+  1219→          </div>
+  1220→
+  1221→          {/* Preview hint */}
+  1222→          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40">
+  1223→            <Activity className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+  1224→            <div className="text-xs text-muted-foreground space-y-1">
+  1225→              <p>
+  1226→                {form.loaderDisplayTime === 0
+  1227→                  ? "Loader tidak akan ditampilkan, data langsung dimuat tanpa animasi."
+  1228→                  : `Loader akan ditampilkan selama minimal ${(form.loaderDisplayTime / 1000).toFixed(1)} detik saat halaman dimuat atau tahun anggaran diubah.`
+  1229→                }
+  1230→              </p>
+  1231→              <p className="text-muted-foreground/60">
+  1232→                Tip: Durasi 3-5 detik memberikan pengalaman visual yang baik tanpa membuat pengguna menunggu terlalu lama.
+  1233→              </p>
+  1234→            </div>
+  1235→          </div>
+  1236→
+  1237→          {/* Loader Image (GIF) Upload — only for classic loader */}
+  1238→          {form.loaderType === "classic" && (
+  1239→          <div className="border-t pt-4 mt-4">
+  1240→            <div className="flex items-center gap-2 mb-3">
+  1241→              <ImagePlus className="w-4 h-4 text-muted-foreground" />
+  1242→              <Label className="text-sm font-semibold">Gambar Loader (Tengah Lingkaran)</Label>
+  1243→            </div>
+  1244→            <p className="text-xs text-muted-foreground mb-3">
+  1245→              Upload gambar atau GIF animasi yang akan ditampilkan di tengah lingkaran loader. Jika tidak diupload, ikon default (📊) akan digunakan.
+  1246→            </p>
+  1247→            <div className="flex flex-col sm:flex-row gap-4 items-start">
+  1248→              {/* Loader Image Preview */}
+  1249→              <div className="flex items-center justify-center w-24 h-24 rounded-xl border-2 border-dashed border-border bg-muted/30 shrink-0 overflow-hidden">
+  1250→                {loaderImagePreview ? (
+  1251→                  <img
+  1252→                    src={loaderImagePreview}
+  1253→                    alt="Loader Image Preview"
+  1254→                    className="max-w-full max-h-full object-contain p-1"
+  1255→                  />
+  1256→                ) : (
+  1257→                  <div className="text-center">
+  1258→                    <span className="text-3xl">📊</span>
+  1259→                    <p className="text-[9px] text-muted-foreground mt-1">Default</p>
+  1260→                  </div>
+  1261→                )}
+  1262→              </div>
+  1263→
+  1264→              {/* Upload Controls */}
+  1265→              <div className="flex-1 space-y-3">
+  1266→                <div className="space-y-2">
+  1267→                  <p className="text-xs text-muted-foreground">
+  1268→                    Format: PNG, JPG, GIF (animasi didukung). Maksimal 2MB.
+  1269→                  </p>
+  1270→                  <input
+  1271→                    ref={loaderImageInputRef}
+  1272→                    type="file"
+  1273→                    accept="image/png,image/jpeg,image/gif,image/webp"
+  1274→                    onChange={handleLoaderImageUpload}
+  1275→                    className="hidden"
+  1276→                    aria-label="Upload gambar loader"
+  1277→                  />
+  1278→                  <div className="flex gap-2">
+  1279→                    <Button
+  1280→                      type="button"
+  1281→                      variant="outline"
+  1282→                      size="sm"
+  1283→                      onClick={() => loaderImageInputRef.current?.click()}
+  1284→                      className="gap-1.5"
+  1285→                    >
+  1286→                      <Upload className="w-4 h-4" />
+  1287→                      Pilih Gambar/GIF
+  1288→                    </Button>
+  1289→                    {(loaderImagePreview || form.loaderImageBase64) && (
+  1290→                      <Button
+  1291→                        type="button"
+  1292→                        variant="outline"
+  1293→                        size="sm"
+  1294→                        onClick={handleRemoveLoaderImage}
+  1295→                        className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+  1296→                      >
+  1297→                        <Trash2 className="w-4 h-4" />
+  1298→                        Hapus
+  1299→                      </Button>
+  1300→                    )}
+  1301→                  </div>
+  1302→                </div>
+  1303→                {loaderImageSizeWarning && (
+  1304→                  <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700">
+  1305→                    <span className="text-sm">
+  1306→                      ⚠️ Ukuran file melebihi 500KB. Ini dapat memperlambat pemuatan halaman.
+  1307→                    </span>
+  1308→                  </div>
+  1309→                )}
+  1310→                {loaderImagePreview && (
+  1311→                  <p className="text-xs text-muted-foreground">
+  1312→                    ✅ Gambar baru akan diterapkan setelah disimpan
+  1313→                  </p>
+  1314→                )}
+  1315→              </div>
+  1316→            </div>
+  1317→          </div>
+  1318→          )}
+  1319→        </CardContent>
+  1320→      </Card>
+  1321→
+  1322→      {/* Section 6.5: Auto-Refresh Interval */}
+  1323→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaSecondary }}>
+  1324→        <CardHeader className="pb-4">
+  1325→          <CardTitle className="flex items-center gap-2 text-base">
+  1326→            <RefreshCw className="w-5 h-5" style={{ color: currentPengaturan.warnaSecondary }} />
+  1327→            Auto-Refresh Dashboard
+  1328→          </CardTitle>
+  1329→          <p className="text-sm text-muted-foreground mt-1">
+  1330→            Atur interval refresh otomatis data dashboard agar selalu mendapat data terbaru tanpa perlu refresh manual.
+  1331→          </p>
+  1332→        </CardHeader>
+  1333→        <CardContent className="space-y-4">
+  1334→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1335→            <div className="space-y-2">
+  1336→              <Label htmlFor="autoRefreshInterval">Interval Auto-Refresh</Label>
+  1337→              <SelectComponent
+  1338→                value={String(form.autoRefreshInterval)}
+  1339→                onValueChange={(val) => handleFieldChange("autoRefreshInterval", val)}
+  1340→              >
+  1341→                <SelectTrigger className="w-full" id="autoRefreshInterval">
+  1342→                  <SelectValue placeholder="Pilih interval" />
+  1343→                </SelectTrigger>
+  1344→                <SelectContent>
+  1345→                  <SelectItem value="0">Nonaktif</SelectItem>
+  1346→                  <SelectItem value="5">5 menit</SelectItem>
+  1347→                  <SelectItem value="10">10 menit</SelectItem>
+  1348→                  <SelectItem value="15">15 menit</SelectItem>
+  1349→                  <SelectItem value="30">30 menit (Direkomendasikan)</SelectItem>
+  1350→                  <SelectItem value="60">1 jam</SelectItem>
+  1351→                  <SelectItem value="120">2 jam</SelectItem>
+  1352→                </SelectContent>
+  1353→              </SelectComponent>
+  1354→            </div>
+  1355→            <div className="space-y-2">
+  1356→              <Label>Status</Label>
+  1357→              <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+  1358→                form.autoRefreshInterval > 0
+  1359→                  ? "border-emerald-200 bg-emerald-50/50 text-emerald-700"
+  1360→                  : "border-border bg-muted/30 text-muted-foreground"
+  1361→              }`}>
+  1362→                {form.autoRefreshInterval > 0 ? (
+  1363→                  <>
+  1364→                    <RefreshCw className="w-4 h-4" />
+  1365→                    <span>Aktif — refresh setiap {form.autoRefreshInterval >= 60 ? `${form.autoRefreshInterval / 60} jam` : `${form.autoRefreshInterval} menit`}</span>
+  1366→                  </>
+  1367→                ) : (
+  1368→                  <>
+  1369→                    <Activity className="w-4 h-4" />
+  1370→                    <span>Auto-refresh nonaktif</span>
+  1371→                  </>
+  1372→                )}
+  1373→              </div>
+  1374→            </div>
+  1375→          </div>
+  1376→
+  1377→          {/* Visual preview of refresh cycle */}
+  1378→          {form.autoRefreshInterval > 0 && (
+  1379→            <div className="p-3 rounded-xl bg-muted/30 border space-y-2">
+  1380→              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pratinjau Siklus Refresh</p>
+  1381→              <div className="flex items-center gap-3">
+  1382→                <div className="flex-1 flex items-center gap-1">
+  1383→                  {/* Animated dots representing the refresh cycle */}
+  1384→                  {Array.from({ length: Math.min(form.autoRefreshInterval / 5, 12) }).map((_, i) => (
+  1385→                    <div
+  1386→                      key={i}
+  1387→                      className="h-2 flex-1 rounded-full"
+  1388→                      style={{
+  1389→                        backgroundColor: i === 0 ? currentPengaturan.warnaPrimary : `${currentPengaturan.warnaPrimary}30`,
+  1390→                        opacity: i === 0 ? 1 : 0.4 + (i * 0.05),
+  1391→                      }}
+  1392→                    />
+  1393→                  ))}
+  1394→                </div>
+  1395→                <RefreshCw className="w-4 h-4 shrink-0" style={{ color: currentPengaturan.warnaPrimary }} />
+  1396→              </div>
+  1397→              <p className="text-[10px] text-muted-foreground">
+  1398→                Setiap {form.autoRefreshInterval >= 60 ? `${form.autoRefreshInterval / 60} jam` : `${form.autoRefreshInterval} menit`}, 
+  1399→                data dashboard akan diperbarui secara diam-diam di latar belakang.
+  1400→              </p>
+  1401→            </div>
+  1402→          )}
+  1403→
+  1404→          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+  1405→            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+  1406→            <span>
+  1407→              Saat aktif, dashboard akan memperbarui data secara otomatis di latar belakang tanpa menampilkan loader. 
+  1408→              Indikator countdown dan tombol refresh manual akan muncul di header dashboard. 
+  1409→              Rekomendasi: <strong>30 menit</strong> untuk keseimbangan antara data terbaru dan performa server.
+  1410→            </span>
+  1411→          </div>
+  1412→        </CardContent>
+  1413→      </Card>
+  1414→
+  1415→      {/* Section 6.7: Versi Aplikasi */}
+  1416→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaDark }}>
+  1417→        <CardHeader className="pb-4">
+  1418→          <CardTitle className="flex items-center gap-2 text-base">
+  1419→            <Info className="w-5 h-5" style={{ color: currentPengaturan.warnaDark }} />
+  1420→            Versi Aplikasi
+  1421→          </CardTitle>
+  1422→          <p className="text-sm text-muted-foreground mt-1">
+  1423→            Atur nomor versi aplikasi yang ditampilkan di footer dan halaman publik.
+  1424→          </p>
+  1425→        </CardHeader>
+  1426→        <CardContent className="space-y-4">
+  1427→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1428→            <div className="space-y-2">
+  1429→              <Label htmlFor="versiAplikasi">Nomor Versi</Label>
+  1430→              <Input
+  1431→                id="versiAplikasi"
+  1432→                value={form.versiAplikasi}
+  1433→                onChange={(e) => handleFieldChange("versiAplikasi", e.target.value)}
+  1434→                placeholder="1.0.0"
+  1435→              />
+  1436→              <p className="text-xs text-muted-foreground">Format yang direkomendasikan: Major.Minor.Patch (contoh: 2.1.0)</p>
+  1437→            </div>
+  1438→            <div className="space-y-2">
+  1439→              <Label>Pratinjau</Label>
+  1440→              <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+  1441→                <span className="text-muted-foreground">Versi</span>
+  1442→                <span className="font-mono font-semibold" style={{ color: currentPengaturan.warnaPrimary }}>
+  1443→                  v{form.versiAplikasi || "1.0.0"}
+  1444→                </span>
+  1445→              </div>
+  1446→            </div>
+  1447→          </div>
+  1448→        </CardContent>
+  1449→      </Card>
+  1450→
+  1451→      {/* Section 7: AI Copilot Configuration */}
+  1452→      <Card className="border-l-4" style={{ borderLeftColor: currentPengaturan.warnaAccent }}>
+  1453→        <CardHeader className="pb-4">
+  1454→          <CardTitle className="flex items-center gap-2 text-base">
+  1455→            <BotMessageSquare className="w-5 h-5" style={{ color: currentPengaturan.warnaAccent }} />
+  1456→            AI Copilot
+  1457→          </CardTitle>
+  1458→          <p className="text-sm text-muted-foreground mt-1">
+  1459→            Konfigurasi AI Financial Copilot untuk analisis keuangan daerah. Pengaturan ini memudahkan deploy dan kustomisasi.
+  1460→          </p>
+  1461→        </CardHeader>
+  1462→        <CardContent className="space-y-5">
+  1463→          {/* Enable/Disable */}
+  1464→          <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border">
+  1465→            <div className="flex items-center gap-3">
+  1466→              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center">
+  1467→                <BotMessageSquare className="w-4.5 h-4.5 text-white" />
+  1468→              </div>
+  1469→              <div>
+  1470→                <p className="text-sm font-medium">Aktifkan AI Copilot</p>
+  1471→                <p className="text-xs text-muted-foreground">Nonaktifkan untuk menyembunyikan fitur chat AI</p>
+  1472→              </div>
+  1473→            </div>
+  1474→            <Switch
+  1475→              checked={form.copilotConfig?.enabled ?? DEFAULT_COPILOT_CONFIG.enabled}
+  1476→              onCheckedChange={(checked) => {
+  1477→                const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1478→                setForm((prev) => ({ ...prev, copilotConfig: { ...current, enabled: checked } }));
+  1479→              }}
+  1480→              className="data-[state=checked]:bg-emerald-500"
+  1481→            />
+  1482→          </div>
+  1483→
+  1484→          {(form.copilotConfig?.enabled ?? DEFAULT_COPILOT_CONFIG.enabled) && (
+  1485→            <>
+  1486→              {/* ═══ Provider & API Key ═══ */}
+  1487→              <div className="space-y-4">
+  1488→                {/* Provider Selector */}
+  1489→                <div className="space-y-2">
+  1490→                  <Label className="flex items-center gap-1.5 text-sm font-medium">
+  1491→                    <Cpu className="w-3.5 h-3.5" />
+  1492→                    Provider AI
+  1493→                  </Label>
+  1494→                  <select
+  1495→                    value={form.copilotConfig?.provider ?? DEFAULT_COPILOT_CONFIG.provider}
+  1496→                    onChange={(e) => {
+  1497→                      const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1498→                      const newProvider = e.target.value;
+  1499→                      // Auto-set base URL based on provider
+  1500→                      const providerUrls: Record<string, string> = {
+  1501→                        'z-ai': '',
+  1502→                        'openai': 'https://api.openai.com/v1',
+  1503→                        'google': 'https://generativelanguage.googleapis.com/v1beta',
+  1504→                        'anthropic': 'https://api.anthropic.com/v1',
+  1505→                        'mistral': 'https://api.mistral.ai/v1',
+  1506→                        'groq': 'https://api.groq.com/openai/v1',
+  1507→                        'deepseek': 'https://api.deepseek.com/v1',
+  1508→                        'custom': '',
+  1509→                      };
+  1510→                      const autoBaseUrl = providerUrls[newProvider] ?? '';
+  1511→                      setForm((prev) => ({
+  1512→                        ...prev,
+  1513→                        copilotConfig: {
+  1514→                          ...current,
+  1515→                          provider: newProvider,
+  1516→                          apiKeys: {
+  1517→                            ...(current.apiKeys || DEFAULT_AI_API_KEYS),
+  1518→                            baseUrl: autoBaseUrl || (current.apiKeys?.baseUrl ?? ''),
+  1519→                          },
+  1520→                        },
+  1521→                      }));
+  1522→                      // Clear test results when provider changes
+  1523→                      setTestResults(null);
+  1524→                    }}
+  1525→                    className="w-full h-10 px-3 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+  1526→                  >
+  1527→                    <option value="z-ai">🤖 Z-AI (Bawaan — Tanpa API Key)</option>
+  1528→                    <option value="openai">🟢 OpenAI</option>
+  1529→                    <option value="google">🔵 Google Gemini</option>
+  1530→                    <option value="anthropic">🟠 Anthropic (Claude)</option>
+  1531→                    <option value="mistral">🔵 Mistral AI</option>
+  1532→                    <option value="groq">⚡ Groq</option>
+  1533→                    <option value="deepseek">🟣 DeepSeek</option>
+  1534→                    <option value="custom">🔧 Custom API</option>
+  1535→                  </select>
+  1536→                  {form.copilotConfig?.provider === 'z-ai' && (
+  1537→                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+  1538→                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+  1539→                      <p className="text-xs text-emerald-700">
+  1540→                        Z-AI sudah tersedia tanpa API key. Semua layanan AI (Chat, Vision, TTS, ASR, Image Gen, Web Search) langsung bisa digunakan.
+  1541→                      </p>
+  1542→                    </div>
+  1543→                  )}
+  1544→                </div>
+  1545→
+  1546→                {/* API Key — single field */}
+  1547→                {form.copilotConfig?.provider !== 'z-ai' && (
+  1548→                  <div className="space-y-2 p-4 rounded-lg bg-muted/30 border border-border/50">
+  1549→                    <Label htmlFor="aiApiKey" className="flex items-center gap-1.5 text-sm font-medium">
+  1550→                      <Key className="w-3.5 h-3.5 text-muted-foreground" />
+  1551→                      API Key
+  1552→                    </Label>
+  1553→                    <div className="relative">
+  1554→                      <Input
+  1555→                        id="aiApiKey"
+  1556→                        type={showApiKeys['apiKey'] ? "text" : "password"}
+  1557→                        value={form.copilotConfig?.apiKeys?.apiKey ?? ""}
+  1558→                        onChange={(e) => {
+  1559→                          const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1560→                          setForm((prev) => ({
+  1561→                            ...prev,
+  1562→                            copilotConfig: {
+  1563→                              ...current,
+  1564→                              apiKeys: { ...(current.apiKeys || DEFAULT_AI_API_KEYS), apiKey: e.target.value },
+  1565→                            },
+  1566→                          }));
+  1567→                        }}
+  1568→                        placeholder={
+  1569→                          form.copilotConfig?.provider === 'openai' ? 'sk-...' :
+  1570→                          form.copilotConfig?.provider === 'google' ? 'AIza...' :
+  1571→                          form.copilotConfig?.provider === 'anthropic' ? 'sk-ant-...' :
+  1572→                          'Masukkan API Key'
+  1573→                        }
+  1574→                        className="pr-10 font-mono text-sm h-10"
+  1575→                      />
+  1576→                      <button
+  1577→                        type="button"
+  1578→                        onClick={() => setShowApiKeys((prev) => ({ ...prev, apiKey: !prev['apiKey'] }))}
+  1579→                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+  1580→                        aria-label={showApiKeys['apiKey'] ? "Sembunyikan" : "Tampilkan"}
+  1581→                      >
+  1582→                        {showApiKeys['apiKey'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+  1583→                      </button>
+  1584→                    </div>
+  1585→                    <p className="text-[11px] text-muted-foreground">
+  1586→                      Satu API Key untuk semua layanan AI ({form.copilotConfig?.provider === 'openai' ? 'OpenAI' : form.copilotConfig?.provider === 'google' ? 'Google' : form.copilotConfig?.provider === 'anthropic' ? 'Anthropic' : form.copilotConfig?.provider === 'mistral' ? 'Mistral' : form.copilotConfig?.provider === 'groq' ? 'Groq' : form.copilotConfig?.provider === 'deepseek' ? 'DeepSeek' : 'Custom'}).
+  1587→                      {!form.copilotConfig?.apiKeys?.apiKey && ' Dapatkan API key dari dashboard provider Anda.'}
+  1588→                    </p>
+  1589→                    {/* API Key status indicator */}
+  1590→                    <div className="flex items-center gap-2 mt-1">
+  1591→                      {form.copilotConfig?.apiKeys?.apiKey ? (
+  1592→                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">
+  1593→                          <CheckCircle2 className="w-3 h-3" /> API Key dikonfigurasi
+  1594→                        </span>
+  1595→                      ) : (
+  1596→                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+  1597→                          <AlertTriangle className="w-3 h-3" /> API Key belum diisi
+  1598→                        </span>
+  1599→                      )}
+  1600→                    </div>
+  1601→                  </div>
+  1602→                )}
+  1603→
+  1604→                {/* Base URL */}
+  1605→                {form.copilotConfig?.provider !== 'z-ai' && (
+  1606→                  <div className="space-y-2">
+  1607→                    <Label htmlFor="aiBaseUrl" className="flex items-center gap-1.5 text-sm">
+  1608→                      <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+  1609→                      Base URL API
+  1610→                    </Label>
+  1611→                    <Input
+  1612→                      id="aiBaseUrl"
+  1613→                      value={form.copilotConfig?.apiKeys?.baseUrl ?? ""}
+  1614→                      onChange={(e) => {
+  1615→                        const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1616→                        setForm((prev) => ({
+  1617→                          ...prev,
+  1618→                          copilotConfig: {
+  1619→                            ...current,
+  1620→                            apiKeys: { ...(current.apiKeys || DEFAULT_AI_API_KEYS), baseUrl: e.target.value },
+  1621→                          },
+  1622→                        }));
+  1623→                      }}
+  1624→                      placeholder="https://api.example.com/v1 (otomatis terisi berdasarkan provider)"
+  1625→                      className="font-mono text-sm"
+  1626→                    />
+  1627→                    <p className="text-[11px] text-muted-foreground">Otomatis terisi berdasarkan provider. Ubah hanya jika menggunakan endpoint kustom.</p>
+  1628→                  </div>
+  1629→                )}
+  1630→
+  1631→                {/* Test Connection */}
+  1632→                <div className="space-y-2">
+  1633→                  <div className="flex items-center gap-2 flex-wrap">
+  1634→                    <Button
+  1635→                      variant="outline"
+  1636→                      size="sm"
+  1637→                      className="gap-1.5 text-xs h-8"
+  1638→                      onClick={handleTestAllConnections}
+  1639→                      disabled={testingAll}
+  1640→                    >
+  1641→                      {testingAll ? (
+  1642→                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+  1643→                      ) : (
+  1644→                        <Zap className="w-3.5 h-3.5" />
+  1645→                      )}
+  1646→                      Tes Koneksi
+  1647→                    </Button>
+  1648→                    {form.copilotConfig?.provider !== 'z-ai' && (
+  1649→                      <Button
+  1650→                        variant="ghost"
+  1651→                        size="sm"
+  1652→                        className="gap-1.5 text-xs h-8"
+  1653→                        onClick={() => {
+  1654→                          const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1655→                          setForm((prev) => ({ ...prev, copilotConfig: { ...current, apiKeys: { ...DEFAULT_AI_API_KEYS } } }));
+  1656→                          setTestResults(null);
+  1657→                        }}
+  1658→                      >
+  1659→                        <RotateCcw className="w-3.5 h-3.5" />
+  1660→                        Reset API Key
+  1661→                      </Button>
+  1662→                    )}
+  1663→                  </div>
+  1664→                  <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-emerald-50/50 border border-emerald-200/50 rounded-lg px-2.5 py-2">
+  1665→                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
+  1666→                    <span className="text-emerald-700">
+  1667→                      Tes koneksi menggunakan nilai yang saat ini di form (belum perlu disimpan terlebih dahulu). 
+  1668→                      Pastikan API Key dan Base URL sudah diisi dengan benar sebelum menekan tombol tes.
+  1669→                    </span>
+  1670→                  </div>
+  1671→                </div>
+  1672→
+  1673→                {/* Connection test results */}
+  1674→                {testResults && (
+  1675→                  <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+  1676→                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hasil Tes Koneksi</p>
+  1677→                    <div className={`grid gap-2 ${form.copilotConfig?.provider === 'z-ai' ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
+  1678→                      {(form.copilotConfig?.provider === 'z-ai'
+  1679→                        ? [
+  1680→                            { key: 'llm', label: 'LLM / Chat', icon: Sparkles },
+  1681→                            { key: 'vlm', label: 'Vision', icon: Eye },
+  1682→                            { key: 'tts', label: 'TTS', icon: Volume2 },
+  1683→                            { key: 'asr', label: 'ASR', icon: Mic },
+  1684→                            { key: 'imageGen', label: 'Image Gen', icon: ImagePlus },
+  1685→                            { key: 'webSearch', label: 'Web Search', icon: Globe },
+  1686→                          ]
+  1687→                        : [
+  1688→                            { key: 'connection', label: 'Koneksi', icon: Wifi },
+  1689→                          ]
+  1690→                      ).map((svc) => {
+  1691→                        const r = testResults[svc.key];
+  1692→                        return (
+  1693→                          <div
+  1694→                            key={svc.key}
+  1695→                            className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs ${
+  1696→                              r?.status === 'success'
+  1697→                                ? 'border-emerald-200 bg-emerald-50/50 text-emerald-700'
+  1698→                                : r?.status === 'error'
+  1699→                                  ? 'border-red-200 bg-red-50/30 text-red-700'
+  1700→                                  : r?.status === 'loading'
+  1701→                                    ? 'border-amber-200 bg-amber-50/30 text-amber-700'
+  1702→                                    : 'border-border bg-card text-muted-foreground'
+  1703→                            }`}
+  1704→                          >
+  1705→                            {r?.status === 'loading' ? (
+  1706→                              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+  1707→                            ) : r?.status === 'success' ? (
+  1708→                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+  1709→                            ) : r?.status === 'error' ? (
+  1710→                              <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+  1711→                            ) : (
+  1712→                              <svc.icon className="w-3.5 h-3.5 shrink-0" />
+  1713→                            )}
+  1714→                            <div className="min-w-0">
+  1715→                              <p className="font-medium leading-tight">{svc.label}</p>
+  1716→                              {r?.latency && <p className="text-[10px] opacity-60">{r.latency}ms</p>}
+  1717→                            </div>
+  1718→                          </div>
+  1719→                        );
+  1720→                      })}
+  1721→                    </div>
+  1722→                    {/* Test error details with troubleshooting hints */}
+  1723→                    {Object.values(testResults).some(r => r.status === 'error') && (
+  1724→                      <div className="space-y-2 pt-1">
+  1725→                        <div className="space-y-1">
+  1726→                          {Object.entries(testResults).filter(([, r]) => r.status === 'error').map(([key, r]) => (
+  1727→                            <p key={key} className="text-[10px] text-red-500 leading-tight">
+  1728→                              <span className="font-medium capitalize">{key}:</span> {r.message}
+  1729→                            </p>
+  1730→                          ))}
+  1731→                        </div>
+  1732→                        {/* Troubleshooting hints */}
+  1733→                        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200/60 space-y-1.5">
+  1734→                          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Tips Pemecahan Masalah</p>
+  1735→                          <ul className="space-y-1 text-[10px] text-amber-800">
+  1736→                            {form.copilotConfig?.provider !== 'z-ai' && !form.copilotConfig?.apiKeys?.apiKey && (
+  1737→                              <li className="flex items-start gap-1.5">
+  1738→                                <span>•</span>
+  1739→                                <span>API Key belum diisi. Masukkan API Key yang valid dari dashboard provider Anda.</span>
+  1740→                              </li>
+  1741→                            )}
+  1742→                            {form.copilotConfig?.provider !== 'z-ai' && form.copilotConfig?.apiKeys?.apiKey && (
+  1743→                              <>
+  1744→                                <li className="flex items-start gap-1.5">
+  1745→                                  <span>•</span>
+  1746→                                  <span>Pastikan API Key sudah benar dan tidak ada spasi di awal/akhir.</span>
+  1747→                                </li>
+  1748→                                <li className="flex items-start gap-1.5">
+  1749→                                  <span>•</span>
+  1750→                                  <span>Pastikan Base URL sesuai dengan provider yang dipilih.</span>
+  1751→                                </li>
+  1752→                                <li className="flex items-start gap-1.5">
+  1753→                                  <span>•</span>
+  1754→                                  <span>Cek apakah API Key Anda memiliki kredit/kuota yang cukup di dashboard provider.</span>
+  1755→                                </li>
+  1756→                                <li className="flex items-start gap-1.5">
+  1757→                                  <span>•</span>
+  1758→                                  <span>Beberapa provider memerlukan aktivasi billing terlebih dahulu sebelum API dapat digunakan.</span>
+  1759→                                </li>
+  1760→                              </>
+  1761→                            )}
+  1762→                            <li className="flex items-start gap-1.5">
+  1763→                              <span>•</span>
+  1764→                              <span>Jika masalah berlanjut, coba simpan pengaturan terlebih dahulu lalu tes ulang.</span>
+  1765→                            </li>
+  1766→                          </ul>
+  1767→                        </div>
+  1768→                      </div>
+  1769→                    )}
+  1770→                  </div>
+  1771→                )}
+  1772→              </div>
+  1773→
+  1774→              {/* Divider */}
+  1775→              <div className="border-t border-border/50" />
+  1776→
+  1777→              {/* Model & Advanced Settings */}
+  1778→              <div className="space-y-4">
+  1779→                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+  1780→                  <Cpu className="w-3.5 h-3.5" />
+  1781→                  Pengaturan Lanjutan
+  1782→                </h4>
+  1783→
+  1784→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1785→                  <div className="space-y-2">
+  1786→                    <Label className="flex items-center gap-1.5">
+  1787→                      <Cpu className="w-3.5 h-3.5" />
+  1788→                      Model
+  1789→                    </Label>
+  1790→                    <Input
+  1791→                      value={form.copilotConfig?.model ?? DEFAULT_COPILOT_CONFIG.model}
+  1792→                      onChange={(e) => {
+  1793→                        const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1794→                        setForm((prev) => ({ ...prev, copilotConfig: { ...current, model: e.target.value } }));
+  1795→                      }}
+  1796→                      placeholder="default"
+  1797→                    />
+  1798→                    <p className="text-[10px] text-muted-foreground">Kosongkan untuk menggunakan model default provider</p>
+  1799→                  </div>
+  1800→                  <div className="space-y-2">
+  1801→                    <Label className="flex items-center gap-1.5">
+  1802→                      <Thermometer className="w-3.5 h-3.5" />
+  1803→                      Temperature
+  1804→                      <span className="ml-auto text-xs font-mono text-muted-foreground">
+  1805→                        {form.copilotConfig?.temperature ?? DEFAULT_COPILOT_CONFIG.temperature}
+  1806→                      </span>
+  1807→                    </Label>
+  1808→                    <input
+  1809→                      type="range"
+  1810→                      min={0}
+  1811→                      max={2}
+  1812→                      step={0.1}
+  1813→                      value={form.copilotConfig?.temperature ?? DEFAULT_COPILOT_CONFIG.temperature}
+  1814→                      onChange={(e) => {
+  1815→                        const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1816→                        setForm((prev) => ({ ...prev, copilotConfig: { ...current, temperature: parseFloat(e.target.value) } }));
+  1817→                      }}
+  1818→                      className="w-full h-2 rounded-full appearance-none cursor-pointer accent-amber-500"
+  1819→                      style={{
+  1820→                        background: `linear-gradient(to right, ${currentPengaturan.warnaAccent} 0%, ${currentPengaturan.warnaAccent} ${((form.copilotConfig?.temperature ?? 0.7) / 2) * 100}%, #e2e8f0 ${((form.copilotConfig?.temperature ?? 0.7) / 2) * 100}%, #e2e8f0 100%)`,
+  1821→                      }}
+  1822→                    />
+  1823→                    <div className="flex justify-between text-[10px] text-muted-foreground">
+  1824→                      <span>0 (Faktual)</span>
+  1825→                      <span>1</span>
+  1826→                      <span>2 (Kreatif)</span>
+  1827→                    </div>
+  1828→                  </div>
+  1829→                </div>
+  1830→
+  1831→                <div className="space-y-2">
+  1832→                  <Label className="flex items-center gap-1.5">
+  1833→                    <Cpu className="w-3.5 h-3.5" />
+  1834→                    Max Tokens
+  1835→                  </Label>
+  1836→                  <Input
+  1837→                    type="number"
+  1838→                    min={256}
+  1839→                    max={16384}
+  1840→                    step={256}
+  1841→                    value={form.copilotConfig?.maxTokens ?? DEFAULT_COPILOT_CONFIG.maxTokens}
+  1842→                    onChange={(e) => {
+  1843→                      const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1844→                      setForm((prev) => ({ ...prev, copilotConfig: { ...current, maxTokens: parseInt(e.target.value) || 4096 } }));
+  1845→                    }}
+  1846→                  />
+  1847→                  <p className="text-[10px] text-muted-foreground">Panjang maksimal respons (256-16384)</p>
+  1848→                </div>
+  1849→
+  1850→                {/* Welcome Message */}
+  1851→                <div className="space-y-2">
+  1852→                  <Label className="flex items-center gap-1.5">
+  1853→                    <MessageSquare className="w-3.5 h-3.5" />
+  1854→                    Pesan Selamat Datang
+  1855→                  </Label>
+  1856→                  <Textarea
+  1857→                    value={form.copilotConfig?.welcomeMessage ?? DEFAULT_COPILOT_CONFIG.welcomeMessage}
+  1858→                    onChange={(e) => {
+  1859→                      const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1860→                      setForm((prev) => ({ ...prev, copilotConfig: { ...current, welcomeMessage: e.target.value } }));
+  1861→                    }}
+  1862→                    rows={2}
+  1863→                    placeholder="Saya siap membantu menganalisis data keuangan daerah..."
+  1864→                  />
+  1865→                </div>
+  1866→
+  1867→                {/* Custom System Prompt */}
+  1868→                <div className="space-y-2">
+  1869→                  <Label className="flex items-center gap-1.5">
+  1870→                    <BotMessageSquare className="w-3.5 h-3.5" />
+  1871→                    System Prompt Tambahan
+  1872→                  </Label>
+  1873→                  <Textarea
+  1874→                    value={form.copilotConfig?.systemPrompt ?? DEFAULT_COPILOT_CONFIG.systemPrompt}
+  1875→                    onChange={(e) => {
+  1876→                      const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+  1877→                      setForm((prev) => ({ ...prev, copilotConfig: { ...current, systemPrompt: e.target.value } }));
+  1878→                    }}
+  1879→                    rows={4}
+  1880→                    placeholder="Tambahkan instruksi khusus untuk AI, misalnya: 'Fokuskan analisis pada efisiensi belanja modal' atau 'Gunakan bahasa yang lebih sederhana'..."
+  1881→                  />
+  1882→                  <p className="text-[10px] text-muted-foreground">
+  1883→                    Instruksi tambahan yang akan ditambahkan ke system prompt bawaan. Kosongkan untuk menggunakan prompt default.
+  1884→                  </p>
+  1885→                </div>
+  1886→
+  1887→                {/* Config Preview */}
+  1888→                <div className="p-3 rounded-xl bg-muted/30 border space-y-2">
+  1889→                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Konfigurasi Saat Ini</p>
+  1890→                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+  1891→                    <span className="text-muted-foreground">Provider:</span>
+  1892→                    <span className="font-medium">{(() => {
+  1893→                      const p = form.copilotConfig?.provider ?? DEFAULT_COPILOT_CONFIG.provider;
+  1894→                      const labels: Record<string, string> = { 'z-ai': 'Z-AI', 'openai': 'OpenAI', 'google': 'Google Gemini', 'anthropic': 'Anthropic', 'mistral': 'Mistral', 'groq': 'Groq', 'deepseek': 'DeepSeek', 'custom': 'Custom' };
+  1895→                      return labels[p] || p;
+  1896→                    })()}</span>
+  1897→                    <span className="text-muted-foreground">Model:</span>
+  1898→                    <span className="font-medium">{form.copilotConfig?.model ?? (DEFAULT_COPILOT_CONFIG.model || "default")}</span>
+  1899→                    <span className="text-muted-foreground">Temperature:</span>
+  1900→                    <span className="font-medium">{form.copilotConfig?.temperature ?? DEFAULT_COPILOT_CONFIG.temperature}</span>
+  1901→                    <span className="text-muted-foreground">Max Tokens:</span>
+  1902→                    <span className="font-medium">{form.copilotConfig?.maxTokens ?? DEFAULT_COPILOT_CONFIG.maxTokens}</span>
+  1903→                    <span className="text-muted-foreground">API Key:</span>
+  1904→                    <span className="font-medium">
+  1905→                      {form.copilotConfig?.provider === 'z-ai' ? 'Tidak diperlukan ✓' :
+  1906→                       form.copilotConfig?.apiKeys?.apiKey ? 'Dikonfigurasi ✓' : 'Belum diisi ⚠'}
+  1907→                    </span>
+  1908→                  </div>
+  1909→                </div>
+  1910→              </div>
+  1911→            </>
+  1912→          )}
+  1913→
+  1914→          {/* Disabled state info */}
+  1915→          {!(form.copilotConfig?.enabled ?? DEFAULT_COPILOT_CONFIG.enabled) && (
+  1916→            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+  1917→              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+  1918→              <p className="text-xs text-amber-700">
+  1919→                AI Copilot dinonaktifkan. Menu &quot;AI Copilot&quot; di sidebar akan disembunyikan dan fitur chat tidak dapat diakses.
+  1920→              </p>
+  1921→            </div>
+  1922→          )}
+  1923→        </CardContent>
+  1924→      </Card>
+  1925→
+  1926→      {/* Section 8: Reset Setup Wizard */}
+  1927→      <Card className="border-l-4 border-l-amber-500">
+  1928→        <CardHeader className="pb-4">
+  1929→          <CardTitle className="flex items-center gap-2 text-base text-amber-700">
+  1930→            <RotateCcw className="w-5 h-5" />
+  1931→            Setup Wizard
+  1932→          </CardTitle>
+  1933→        </CardHeader>
+  1934→        <CardContent>
+  1935→          <p className="text-sm text-muted-foreground mb-3">
+  1936→            Jalankan kembali setup wizard untuk mengkonfigurasi ulang aplikasi dari awal. Data yang sudah ada tidak akan dihapus.
+  1937→          </p>
+  1938→          <Button
+  1939→            variant="outline"
+  1940→            onClick={async () => {
+  1941→              if (!confirm("Apakah Anda yakin ingin menjalankan ulang Setup Wizard? Halaman akan di-refresh setelah konfirmasi.")) return;
+  1942→              setResettingSetup(true);
+  1943→              try {
+  1944→                const res = await fetch("/api/admin/pengaturan", {
+  1945→                  method: "PUT",
+  1946→                  headers: { "Content-Type": "application/json" },
+  1947→                  body: JSON.stringify({ setupComplete: false }),
+  1948→                });
+  1949→                if (!res.ok) throw new Error("Gagal reset setup");
+  1950→                window.location.reload();
+  1951→              } catch (error) {
+  1952→                toast({
+  1953→                  title: "Error",
+  1954→                  description: error instanceof Error ? error.message : "Gagal reset setup wizard",
+  1955→                  variant: "destructive",
+  1956→                });
+  1957→                setResettingSetup(false);
+  1958→              }
+  1959→            }}
+  1960→            disabled={resettingSetup}
+  1961→            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+  1962→          >
+  1963→            {resettingSetup ? (
+  1964→              <>
+  1965→                <Loader2 className="w-4 h-4 animate-spin" />
+  1966→                Mereset...
+  1967→              </>
+  1968→            ) : (
+  1969→              <>
+  1970→                <RotateCcw className="w-4 h-4" />
+  1971→                Jalankan Ulang Setup Wizard
+  1972→              </>
+  1973→            )}
+  1974→          </Button>
+  1975→          <div className="flex items-start gap-2 mt-3 p-2 rounded-lg bg-amber-50 border border-amber-200">
+  1976→            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+  1977→            <p className="text-xs text-amber-700">
+  1978→              Setup wizard akan muncul saat halaman di-refresh. Pastikan Anda mengingat kredensial admin yang ada.
+  1979→            </p>
+  1980→          </div>
+  1981→        </CardContent>
+  1982→      </Card>
+  1983→
+  1984→      {/* Save Button */}
+  1985→      <div className="flex justify-end">
+  1986→        <Button
+  1987→          onClick={handleSave}
+  1988→          disabled={saving}
+  1989→          className="gap-2 text-white min-w-[160px]"
+  1990→          style={{
+  1991→            backgroundColor: currentPengaturan.warnaPrimary,
+  1992→          }}
+  1993→          onMouseEnter={(e) => {
+  1994→            e.currentTarget.style.backgroundColor = currentPengaturan.warnaSecondary;
+  1995→          }}
+  1996→          onMouseLeave={(e) => {
+  1997→            e.currentTarget.style.backgroundColor = currentPengaturan.warnaPrimary;
+  1998→          }}
+  1999→          size="lg"
+  2000→        >
+
+[showing lines 1-2000 of 2017; use offset=2001 with limit to continue reading]
