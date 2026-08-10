@@ -6,7 +6,11 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-export const maxBodyLength = 50 * 1024 * 1024 // 50MB for PDF files
+// NOTE: Next.js App Router does NOT support `export const maxBodyLength`.
+// That is a Pages Router API concept. In App Router, request.formData() is
+// stream-based and handles large bodies. We validate file size manually below.
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB for PDF files
 
 type JenisData = 'pendapatan' | 'belanja' | 'pembiayaan'
 
@@ -41,6 +45,14 @@ export async function POST(request: Request) {
 
     if (!file) {
       return NextResponse.json({ error: 'File PDF wajib diupload' }, { status: 400 })
+    }
+
+    // Manual file size validation (since App Router ignores maxBodyLength)
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File terlalu besar. Maksimum ${MAX_FILE_SIZE / 1024 / 1024}MB. File Anda: ${(file.size / 1024 / 1024).toFixed(1)}MB` },
+        { status: 413 }
+      )
     }
 
     if (!jenis || !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis)) {
@@ -262,24 +274,43 @@ export async function POST(request: Request) {
  * Also tries to capture associated data (nama akun, anggaran, realisasi) from the same line.
  */
 async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
-  // Use pdfjs-dist for reliable PDF text extraction
-  // We use the legacy build which works in Node.js environments
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.js')
+  // Use pdfjs-dist for reliable PDF text extraction.
+  // We use the legacy build which works in Node.js environments.
+  //
+  // IMPORTANT: We use require() instead of dynamic import() because:
+  // 1. Turbopack (Next.js 16 default) may not correctly resolve deep
+  //    node_modules paths via dynamic import()
+  // 2. pdfjs-dist is listed in serverExternalPackages in next.config.ts,
+  //    so it's excluded from the bundle and loaded via Node.js require()
+  // 3. The legacy build is designed for Node.js and avoids canvas/path2d issues
+  let pdfjsLib: typeof import('pdfjs-dist')
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js')
+  } catch {
+    // Fallback: try the standard entry point
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    pdfjsLib = require('pdfjs-dist')
+  }
 
-  // Set the worker source to the actual worker file
-  // This avoids the "Cannot find module './pdf.worker.js'" error
-  const path = await import('path')
-  const workerPath = path.join(
-    process.cwd(),
-    'node_modules/pdfjs-dist/legacy/build/pdf.worker.js'
-  )
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath
+  // Disable the web worker for server-side usage.
+  // In Node.js, we don't need a Web Worker — PDF parsing runs on the main thread.
+  // Using process.cwd() + node_modules path breaks in:
+  //   - standalone production builds (no node_modules)
+  //   - Vercel serverless functions
+  //   - Docker containers with different working directories
+  // Setting workerSrc to empty string makes pdfjs-dist run on the main thread,
+  // which is correct and safe for server-side processing.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: true,
     // Disable font rendering to avoid canvas dependency
     disableFontFace: true,
+    // Prevent worker-related issues on server-side
+    isEvalSupported: false,
+    useWorkerFetch: false,
   })
 
   const pdfDocument = await loadingTask.promise

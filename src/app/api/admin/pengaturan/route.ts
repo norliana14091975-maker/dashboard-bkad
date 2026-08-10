@@ -4,8 +4,9 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-// Increase body size limit to 10MB for large base64 image uploads (GIF, etc.)
-export const maxBodyLength = 10 * 1024 * 1024
+// NOTE: Next.js App Router does NOT support `export const maxBodyLength`.
+// That is a Pages Router API concept. In App Router, request.formData() is
+// stream-based and handles large bodies. We validate sizes manually in the handler.
 
 async function checkAuth() {
   const session = await getServerSession(authOptions)
