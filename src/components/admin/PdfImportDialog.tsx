@@ -242,7 +242,6 @@ export default function PdfImportDialog({
 
   // Selected rows for import (checkbox)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
-  const [allSelected, setAllSelected] = useState(true);
 
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const isOpdUser = user?.role === "opd";
@@ -324,7 +323,6 @@ export default function PdfImportDialog({
     setUploadedFileName("");
     setSelectedOpdId("");
     setSelectedRows(new Set());
-    setAllSelected(true);
     setGlobalKategori(effectiveJenis ? defaultKategori[effectiveJenis] : "");
     setAvailablePrefixes([]);
     setSelectedPrefixes(new Set());
@@ -358,6 +356,9 @@ export default function PdfImportDialog({
     });
     return indices;
   }, [importRows, prefixFilterEnabled, selectedPrefixes]);
+
+  // Computed: allSelected - derived from selectedRows and filteredImportRows
+  const allSelected = filteredToOriginalIndex.length > 0 && filteredToOriginalIndex.every(idx => selectedRows.has(idx));
 
   // Toggle a prefix filter
   const togglePrefix = (prefix: string) => {
@@ -402,11 +403,15 @@ export default function PdfImportDialog({
 
   const toggleAll = () => {
     if (allSelected) {
-      setSelectedRows(new Set());
-      setAllSelected(false);
+      // Deselect only the filtered rows (keep any manually selected non-filtered rows)
+      const newSelected = new Set(selectedRows);
+      for (const idx of filteredToOriginalIndex) {
+        newSelected.delete(idx);
+      }
+      setSelectedRows(newSelected);
     } else {
-      setSelectedRows(new Set(importRows.map((_, i) => i)));
-      setAllSelected(true);
+      // Select only the filtered rows (items not in filter are NOT selected)
+      setSelectedRows(new Set(filteredToOriginalIndex));
     }
   };
 
@@ -479,7 +484,6 @@ export default function PdfImportDialog({
       }));
       setImportRows(rows);
       setSelectedRows(new Set(rows.map((_, i) => i)));
-      setAllSelected(true);
 
       // Extract available prefixes from the kode akun list
       const prefixes = extractPrefixesFromKodeAkun(rows.map(r => r.kodeAkun));
@@ -619,7 +623,7 @@ export default function PdfImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${effectiveJenis ? jenisGradients[effectiveJenis] : 'from-sky-500 to-blue-600'} flex items-center justify-center`}>
@@ -802,7 +806,8 @@ export default function PdfImportDialog({
                   <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                     <li>Upload file PDF (DPA, APBD, dokumen keuangan)</li>
                     <li>Sistem otomatis mengekstrak <strong>kode akun 17 digit</strong> (termasuk titik) dari teks PDF</li>
-                    <li>Nama akun, anggaran, dan realisasi juga diekstrak jika tersedia</li>
+                    <li>Nama akun, anggaran, dan <strong>realisasi tahun aktif</strong> diekstrak jika tersedia</li>
+                    <li><strong>Realisasi tahun sebelumnya diabaikan</strong> — hanya realisasi tahun aktif yang dibaca</li>
                     <li>Anda dapat mengedit data sebelum mengimpor ke database</li>
                     <li>OPD User hanya dapat mengimpor ke OPD sendiri</li>
                     <li>Admin / Super Admin dapat memilih OPD tujuan</li>
@@ -982,7 +987,7 @@ export default function PdfImportDialog({
 
                 {/* Preview Table */}
                 <div className="border rounded-lg overflow-hidden">
-                  <ScrollArea className="h-[350px]">
+                  <ScrollArea className="h-[500px]">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
@@ -1000,7 +1005,7 @@ export default function PdfImportDialog({
                           <TableHead className="min-w-[200px]">Nama Akun</TableHead>
                           <TableHead className="w-32">Kategori</TableHead>
                           <TableHead className="w-32 text-right">Anggaran</TableHead>
-                          <TableHead className="w-32 text-right">Realisasi</TableHead>
+                          <TableHead className="w-36 text-right">Realisasi Thn Aktif</TableHead>
                           <TableHead className="w-20 text-center">Panjang</TableHead>
                         </TableRow>
                       </TableHeader>

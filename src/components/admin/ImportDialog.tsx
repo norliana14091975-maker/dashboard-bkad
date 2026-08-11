@@ -557,7 +557,7 @@ export default function ImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh]">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className={`w-2.5 h-2.5 rounded-full ${effectiveJenis ? jenisColors[effectiveJenis] : 'bg-sky-500'}`} />

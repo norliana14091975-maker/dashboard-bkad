@@ -294,3 +294,30 @@ Stage Summary:
 - Multi-jenis import: single file can contain pendapatan, belanja, and pembiayaan data
 - UI shows colored badges for detected categories
 - Backward compatible: existing per-page import still works
+
+---
+Task ID: 1
+Agent: main
+Task: Fix PDF import rules - realisasi tahun aktif, checkbox filter, modal size
+
+Work Log:
+- Examined import-pdf route.ts parseLineData() function - found it uses first 2 numbers as anggaran+realisasi
+- Examined PdfImportDialog.tsx toggleAll() - found it selected ALL importRows regardless of filter
+- Examined ImportDialog.tsx - found it used sm:max-w-2xl modal size
+- Changed parseLineData() to handle 3+ numbers: first=anggaran, last=realisasi tahun aktif, middle=ignored
+- Changed toggleAll() to only select/deselect filtered rows via filteredToOriginalIndex
+- Converted allSelected from useState to derived value based on selectedRows and filteredToOriginalIndex
+- Enlarged PDF import modal from max-w-4xl to max-w-7xl, max-h-[90vh] to max-h-[95vh]
+- Enlarged Excel import modal from sm:max-w-2xl to sm:max-w-5xl
+- Renamed "Realisasi" column header to "Realisasi Thn Aktif"
+- Increased preview table ScrollArea from h-[350px] to h-[500px]
+- Updated help text to explain realisasi tahun aktif logic
+- Ran lint: all clean
+- Verified with agent-browser: page loads correctly, no errors
+
+Stage Summary:
+- parseLineData() now correctly reads only realisasi tahun aktif when 3+ numbers found in PDF line
+- Checkbox "select all" now only selects filtered rows (items not matching filter stay unchecked)
+- allSelected is now a derived value, not independent state
+- Both import modals are significantly larger for better data preview
+- Column header clarifies "Realisasi Thn Aktif"

@@ -471,7 +471,13 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
 
 /**
  * Parse the text after a kode akun to extract nama akun and amounts.
- * Government PDFs typically have: KODE NAMA_AKUN ANGGARAN REALISASI
+ * Government PDFs (DPA/DPPA) typically have columns:
+ *   KODE NAMA_AKUN ANGGARAN REALISASI_TAHUN_SEBELUMNYA REALISASI_TAHUN_AKTIF
+ * When 3+ numbers are found, we only read:
+ *   - First number = Anggaran
+ *   - Last number = Realisasi Tahun Aktif
+ *   - Middle numbers = Realisasi Tahun Sebelumnya (IGNORED)
+ * When 2 numbers: first = Anggaran, second = Realisasi
  */
 function parseLineData(text: string): { namaAkun: string; anggaran: number; realisasi: number } {
   if (!text || text.length === 0) {
@@ -503,8 +509,16 @@ function parseLineData(text: string): { namaAkun: string; anggaran: number; real
   let anggaran = 0
   let realisasi = 0
 
-  if (numbers.length >= 2) {
-    // First number is likely anggaran, second is realisasi
+  if (numbers.length >= 3) {
+    // 3+ numbers: anggaran, realisasi tahun sebelumnya (IGNORE), realisasi tahun aktif
+    // DPA/DPPA PDFs typically have columns:
+    //   Kode | Nama | Anggaran | Realisasi Tahun Sebelumnya | Realisasi Tahun Aktif
+    // We only read the anggaran (first) and realisasi tahun aktif (last)
+    namaAkun = text.substring(0, numbers[0].index).trim()
+    anggaran = numbers[0].value
+    realisasi = numbers[numbers.length - 1].value
+  } else if (numbers.length === 2) {
+    // 2 numbers: anggaran and realisasi (only one year)
     namaAkun = text.substring(0, numbers[0].index).trim()
     anggaran = numbers[0].value
     realisasi = numbers[1].value
