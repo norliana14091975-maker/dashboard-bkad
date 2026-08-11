@@ -623,7 +623,7 @@ export default function PdfImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="max-w-[95vw] w-full max-h-[95vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${effectiveJenis ? jenisGradients[effectiveJenis] : 'from-sky-500 to-blue-600'} flex items-center justify-center`}>

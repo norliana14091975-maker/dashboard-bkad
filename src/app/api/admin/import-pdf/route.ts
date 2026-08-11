@@ -491,12 +491,20 @@ function parseLineData(text: string): { namaAkun: string; anggaran: number; real
     return { namaAkun: '', anggaran: 0, realisasi: 0 }
   }
 
-  // Strategy: Find numbers in the text. The text between kode and the first number is the nama akun.
-  // Then the numbers are anggaran and realisasi (could be 1, 2, or more numbers).
+  // Strategy: Find numbers in the text, INCLUDING zero values.
+  // The text between kode and the first number is the nama akun.
+  // Then the numbers are: Col3=Anggaran, Col4=Realisasi, Col5+=ignored
+  //
+  // CRITICAL: We MUST include zero values (0, 0,00, etc.) in the number list
+  // to maintain correct column alignment. If we skip zeros, columns shift and
+  // we end up reading column 5/6 data as column 3/4 (BUG FIX).
 
-  // Indonesian number format: 1.234.567 or 1,234,567 or 1234567
-  // We need to find large number patterns
-  const indoNumberPattern = /(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?)|(\d{4,})/g
+  // Indonesian number format patterns:
+  // - Thousand-separated: 1.234.567 or 1,234,567
+  // - Large plain: 1234567
+  // - Zero values: 0, 0,00, 0.00 (IMPORTANT: include these for column alignment)
+  //   The zero pattern uses a lookbehind/lookahead to avoid matching "0" inside other text
+  const indoNumberPattern = /(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?)|(\d{4,})|((?<=\s|^)0(?:[.,]\d+)?(?=\s|$))/g
 
   const numbers: { value: number; index: number }[] = []
   let numMatch: RegExpExecArray | null
@@ -506,7 +514,7 @@ function parseLineData(text: string): { namaAkun: string; anggaran: number; real
     // Parse Indonesian format: remove dots as thousand separators, handle comma as decimal
     const cleaned = numStr.replace(/\./g, '').replace(/,/, '.')
     const value = parseFloat(cleaned)
-    if (!isNaN(value) && value > 0) {
+    if (!isNaN(value) && value >= 0) {
       numbers.push({ value, index: numMatch.index })
     }
   }
