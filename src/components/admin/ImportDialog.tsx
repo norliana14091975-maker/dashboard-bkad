@@ -50,12 +50,15 @@ type ImportRow = {
   kategori: string;
   anggaran: number;
   realisasi: number;
+  jenis?: JenisData; // for auto-detect mode
+  detectedJenis?: JenisData | null;
+  detectedKategori?: string;
 };
 
 type ImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  jenis: JenisData;
+  jenis?: JenisData | "auto"; // optional: 'auto' = detect from kode akun
   tahunAnggaranId: string | null;
   onSuccess: () => void;
 };
@@ -78,6 +81,12 @@ const jenisGradients: Record<JenisData, string> = {
   pembiayaan: "from-amber-500 to-orange-500",
 };
 
+const jenisBadgeClasses: Record<JenisData, string> = {
+  pendapatan: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  belanja: "bg-red-100 text-red-800 border-red-300",
+  pembiayaan: "bg-amber-100 text-amber-800 border-amber-300",
+};
+
 export default function ImportDialog({
   open,
   onOpenChange,
@@ -89,6 +98,9 @@ export default function ImportDialog({
   const { pengaturan } = usePengaturan();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isAutoDetect = !jenis || jenis === "auto";
+  const effectiveJenis = jenis === "auto" ? undefined : jenis;
 
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
@@ -345,6 +357,48 @@ export default function ImportDialog({
     return num;
   };
 
+  // Auto-detect jenis and kategori from kode akun prefix
+  const enrichRowsWithAutoDetect = (rows: ImportRow[]): ImportRow[] => {
+    if (!isAutoDetect) return rows;
+    return rows.map(row => {
+      const firstDigit = row.kodeAkun.trim().charAt(0);
+      let detectedJenis: JenisData | null = null;
+      let detectedKategori = row.kategori; // keep existing kategori from file
+
+      switch (firstDigit) {
+        case '4':
+          detectedJenis = 'pendapatan';
+          if (!row.kategori) {
+            const seg2 = row.kodeAkun.split('.')[1];
+            detectedKategori = seg2 === '1' ? 'PAD' : seg2 === '2' ? 'Transfer' : seg2 === '3' ? 'Lain-Lain' : 'PAD';
+          }
+          break;
+        case '5':
+          detectedJenis = 'belanja';
+          if (!row.kategori) {
+            const seg2 = row.kodeAkun.split('.')[1];
+            detectedKategori = seg2 === '1' ? 'Operasi' : seg2 === '2' ? 'Modal' : seg2 === '3' ? 'Tidak Terduga' : seg2 === '4' ? 'Transfer' : 'Operasi';
+          }
+          break;
+        case '6':
+          detectedJenis = 'pembiayaan';
+          if (!row.kategori) {
+            const seg2 = row.kodeAkun.split('.')[1];
+            detectedKategori = seg2 === '1' ? 'Penerimaan' : seg2 === '2' ? 'Pengeluaran' : 'Penerimaan';
+          }
+          break;
+      }
+
+      return {
+        ...row,
+        kategori: detectedKategori,
+        jenis: detectedJenis || undefined,
+        detectedJenis,
+        detectedKategori,
+      };
+    });
+  };
+
   const handleFile = (file: File) => {
     const isXLSX = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
     const isCSV = file.name.endsWith('.csv') || file.name.endsWith('.txt');
@@ -366,7 +420,7 @@ export default function ImportDialog({
         const data = e.target?.result as ArrayBuffer;
         const { rows, errors } = parseXLSX(data);
         setParseErrors(errors);
-        setParsedRows(rows);
+        setParsedRows(enrichRowsWithAutoDetect(rows));
 
         if (rows.length > 0) {
           setStep("preview");
@@ -392,7 +446,7 @@ export default function ImportDialog({
         const text = e.target?.result as string;
         const { rows, errors } = parseCSV(text);
         setParseErrors(errors);
-        setParsedRows(rows);
+        setParsedRows(enrichRowsWithAutoDetect(rows));
 
         if (rows.length > 0) {
           setStep("preview");
@@ -445,7 +499,7 @@ export default function ImportDialog({
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          jenis,
+          jenis: isAutoDetect ? "auto" : effectiveJenis,
           tahunAnggaranId,
           rows: parsedRows,
           mode,
@@ -506,11 +560,13 @@ export default function ImportDialog({
       <DialogContent className="sm:max-w-2xl max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${jenisColors[jenis]}`} />
-            Import Data {jenisLabels[jenis]}
+            <div className={`w-2.5 h-2.5 rounded-full ${effectiveJenis ? jenisColors[effectiveJenis] : 'bg-sky-500'}`} />
+            Import Data{isAutoDetect ? " — Auto-Detect" : ` ${jenisLabels[effectiveJenis!]}`}
           </DialogTitle>
           <DialogDescription>
-            Impor data {jenisLabels[jenis]} dari file Excel (.xlsx) atau CSV
+            {isAutoDetect
+              ? "Impor data dari file Excel/CSV. Kategori (Pendapatan/Belanja/Pembiayaan) terdeteksi otomatis dari kode akun."
+              : `Impor data ${jenisLabels[effectiveJenis!]} dari file Excel (.xlsx) atau CSV`}
           </DialogDescription>
         </DialogHeader>
 
@@ -826,6 +882,7 @@ export default function ImportDialog({
                       <tr>
                         <th className="text-left p-2 font-semibold w-8">#</th>
                         <th className="text-left p-2 font-semibold">Kode Akun</th>
+                        {isAutoDetect && <th className="text-left p-2 font-semibold">Jenis</th>}
                         <th className="text-left p-2 font-semibold">Nama Akun</th>
                         <th className="text-left p-2 font-semibold">Kategori</th>
                         <th className="text-right p-2 font-semibold">Anggaran</th>
@@ -844,6 +901,19 @@ export default function ImportDialog({
                         >
                           <td className="p-2 text-muted-foreground">{idx + 1}</td>
                           <td className="p-2 font-mono">{row.kodeAkun}</td>
+                          {isAutoDetect && (
+                            <td className="p-2">
+                              {row.detectedJenis ? (
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${jenisBadgeClasses[row.detectedJenis]}`}>
+                                  {jenisLabels[row.detectedJenis]}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border-gray-300">
+                                  ?
+                                </Badge>
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 max-w-[150px] truncate">{row.namaAkun}</td>
                           <td className="p-2">
                             <Badge variant="outline" className="text-[10px] h-5">

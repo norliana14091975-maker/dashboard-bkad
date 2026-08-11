@@ -5,14 +5,13 @@ import { syncRealisasiSkpd } from '@/lib/sync-realisasi-skpd'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { detectJenisFromKodeAkun, detectKategoriFromKodeAkun, type JenisData } from '@/lib/akun-detector'
 
 // NOTE: Next.js App Router does NOT support `export const maxBodyLength`.
 // That is a Pages Router API concept. In App Router, request.formData() is
 // stream-based and handles large bodies. We validate file size manually below.
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB for PDF files
-
-type JenisData = 'pendapatan' | 'belanja' | 'pembiayaan'
 
 interface ExtractedAkun {
   kodeAkun: string
@@ -21,6 +20,8 @@ interface ExtractedAkun {
   realisasi: number
   line: number
   rawLine: string
+  detectedJenis: JenisData | null
+  detectedKategori: string
 }
 
 // POST /api/admin/import-pdf
@@ -55,8 +56,10 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!jenis || !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis)) {
-      return NextResponse.json({ error: 'Jenis data harus pendapatan, belanja, atau pembiayaan' }, { status: 400 })
+    // jenis can be a specific value or 'auto' for auto-detection
+    const isAutoDetect = jenis === 'auto'
+    if (!jenis || (!isAutoDetect && !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis))) {
+      return NextResponse.json({ error: 'Jenis data harus pendapatan, belanja, pembiayaan, atau auto' }, { status: 400 })
     }
 
     if (!tahunAnggaranId) {
@@ -114,13 +117,22 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
-    // If action is 'parse', return preview data only
+    // If action is 'parse', return preview data with auto-detected jenis/kategori
     if (action === 'parse') {
+      // Summarize detected categories
+      const jenisSummary: Record<string, number> = {}
+      for (const item of extractedData) {
+        const key = item.detectedJenis || 'unknown'
+        jenisSummary[key] = (jenisSummary[key] || 0) + 1
+      }
+
       return NextResponse.json({
         success: true,
         action: 'parse',
         extracted: extractedData,
         totalFound: extractedData.length,
+        jenisSummary,
+        isAutoDetect,
         opdId: finalOpdId,
         opdName: finalOpdId ? (await db.opd.findUnique({ where: { id: finalOpdId } }))?.namaOpd : null,
       })
@@ -163,41 +175,64 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Validasi gagal', validationErrors }, { status: 400 })
       }
 
-      const userName = (session.user as { name?: string })?.name || 'Unknown'
-      const dbModel = getDbModel(jenis as JenisData)
-      const historyModel = getHistoryModel(jenis as JenisData)
-
-      // If replace mode, delete existing data first
-      if (mode === 'replace') {
-        const deleteWhere: Record<string, unknown> = { tahunAnggaranId }
-        if (finalOpdId) {
-          deleteWhere.opdId = finalOpdId
-        }
-        await dbModel.deleteMany({ where: deleteWhere })
-      }
+      // Each row may have its own jenis (for auto-detect mode)
+      // The 'jenis' field on each row takes priority; otherwise fall back to the global jenis
+      type ImportRowWithJenis = typeof rows[number] & { jenis?: string }
+      const rowsWithJenis = rows as ImportRowWithJenis[]
 
       let created = 0
       let updated = 0
+      const jenisImported: Record<string, { created: number; updated: number }> = {}
 
+      // If replace mode, delete existing data per-jenis first
       if (mode === 'replace') {
-        const createData = rows.map(row => ({
-          tahunAnggaranId,
-          kodeAkun: row.kodeAkun.trim(),
-          namaAkun: row.namaAkun.trim(),
-          kategori: row.kategori.trim(),
-          anggaran: row.anggaran || 0,
-          realisasi: row.realisasi || 0,
-          opdId: finalOpdId,
-        }))
-        await dbModel.createMany({ data: createData })
-        created = rows.length
-      } else {
-        // Upsert mode
-        for (const row of rows) {
-          const kodeAkun = row.kodeAkun.trim()
-          const namaAkun = row.namaAkun.trim()
-          const kategori = row.kategori.trim()
+        const jenisSet = new Set<string>()
+        for (const row of rowsWithJenis) {
+          const rowJenis = row.jenis || jenis
+          if (rowJenis && ['pendapatan', 'belanja', 'pembiayaan'].includes(rowJenis)) {
+            jenisSet.add(rowJenis)
+          }
+        }
+        for (const j of jenisSet) {
+          const deleteWhere: Record<string, unknown> = { tahunAnggaranId }
+          if (finalOpdId) {
+            deleteWhere.opdId = finalOpdId
+          }
+          await getDbModel(j as JenisData).deleteMany({ where: deleteWhere })
+        }
+      }
 
+      // Import rows, routing each to the correct database model based on its jenis
+      for (const row of rowsWithJenis) {
+        const rowJenis = (row.jenis || jenis) as string
+        if (!['pendapatan', 'belanja', 'pembiayaan'].includes(rowJenis)) continue
+
+        const dbModel = getDbModel(rowJenis as JenisData)
+        const kodeAkun = row.kodeAkun.trim()
+        const namaAkun = row.namaAkun.trim()
+        const kategori = row.kategori.trim()
+
+        if (!jenisImported[rowJenis]) {
+          jenisImported[rowJenis] = { created: 0, updated: 0 }
+        }
+
+        if (mode === 'replace') {
+          // In replace mode, just create (we already deleted above)
+          await dbModel.create({
+            data: {
+              tahunAnggaranId,
+              kodeAkun,
+              namaAkun,
+              kategori,
+              anggaran: row.anggaran || 0,
+              realisasi: row.realisasi || 0,
+              opdId: finalOpdId,
+            },
+          })
+          created++
+          jenisImported[rowJenis].created++
+        } else {
+          // Upsert mode
           const existingWhere: Record<string, unknown> = {
             kodeAkun,
             kategori,
@@ -222,6 +257,7 @@ export async function POST(request: Request) {
               },
             })
             updated++
+            jenisImported[rowJenis].updated++
           } else {
             await dbModel.create({
               data: {
@@ -235,6 +271,7 @@ export async function POST(request: Request) {
               },
             })
             created++
+            jenisImported[rowJenis].created++
           }
         }
       }
@@ -244,10 +281,17 @@ export async function POST(request: Request) {
       await syncRealisasiSkpd(tahunAnggaranId)
       invalidateDashboardCache()
 
+      // Build detail message with per-jenis breakdown
+      const jenisNameMap: Record<string, string> = { pendapatan: 'Pendapatan', belanja: 'Belanja', pembiayaan: 'Pembiayaan' }
+      const breakdown = Object.entries(jenisImported)
+        .map(([j, stats]) => `${jenisNameMap[j] || j}: ${stats.created} baru, ${stats.updated} update`)
+        .join('; ')
       const modeLabel = mode === 'replace' ? 'ganti semua' : 'timpa data sama'
-      const detailMsg = mode === 'replace'
-        ? `Berhasil mengimpor ${created} data dari PDF (mode ganti semua)`
-        : `Berhasil mengimpor ${created} data baru & mengupdate ${updated} data dari PDF (mode timpa data sama)`
+      const detailMsg = isAutoDetect
+        ? `Berhasil mengimpor dari PDF (${modeLabel}): ${breakdown}`
+        : mode === 'replace'
+          ? `Berhasil mengimpor ${created} data dari PDF (mode ganti semua)`
+          : `Berhasil mengimpor ${created} data baru & mengupdate ${updated} data dari PDF (mode timpa data sama)`
 
       return NextResponse.json({
         success: true,
@@ -256,6 +300,7 @@ export async function POST(request: Request) {
         created,
         updated,
         mode,
+        jenisImported,
         message: detailMsg,
       })
     }
@@ -393,6 +438,12 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
       // Try to extract nama akun (text before numbers) and amounts
       const { namaAkun, anggaran, realisasi } = parseLineData(afterCode)
 
+      // Auto-detect jenis and kategori from kode akun prefix
+      const detectedJenis = detectJenisFromKodeAkun(kodeAkun)
+      const detectedKategori = detectedJenis
+        ? detectKategoriFromKodeAkun(kodeAkun)
+        : 'Lainnya'
+
       results.push({
         kodeAkun,
         namaAkun: namaAkun || `Akun ${kodeAkun}`,
@@ -400,6 +451,8 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
         realisasi,
         line: i + 1,
         rawLine: line.trim(),
+        detectedJenis,
+        detectedKategori,
       })
     }
   }

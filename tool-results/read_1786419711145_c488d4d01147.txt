@@ -1,0 +1,986 @@
+     1→"use client";
+     2→
+     3→import { useState, useRef, useCallback, useEffect } from "react";
+     4→import { Button } from "@/components/ui/button";
+     5→import {
+     6→  Dialog,
+     7→  DialogContent,
+     8→  DialogDescription,
+     9→  DialogFooter,
+    10→  DialogHeader,
+    11→  DialogTitle,
+    12→} from "@/components/ui/dialog";
+    13→import { Label } from "@/components/ui/label";
+    14→import { Badge } from "@/components/ui/badge";
+    15→import { useToast } from "@/hooks/use-toast";
+    16→import { useAuth } from "@/hooks/use-auth";
+    17→import {
+    18→  Upload,
+    19→  Download,
+    20→  FileSpreadsheet,
+    21→  AlertCircle,
+    22→  CheckCircle2,
+    23→  Loader2,
+    24→  Trash2,
+    25→  Plus,
+    26→  Eye,
+    27→  X,
+    28→  FileDown,
+    29→  Building2,
+    30→  ShieldCheck,
+    31→  ShieldX,
+    32→} from "lucide-react";
+    33→import { motion, AnimatePresence } from "framer-motion";
+    34→import { usePengaturan } from "@/context/PengaturanContext";
+    35→import * as XLSX from 'xlsx';
+    36→import {
+    37→  Select,
+    38→  SelectContent,
+    39→  SelectItem,
+    40→  SelectTrigger,
+    41→  SelectValue,
+    42→} from "@/components/ui/select";
+    43→import { Input } from "@/components/ui/input";
+    44→
+    45→type JenisData = "pendapatan" | "belanja" | "pembiayaan";
+    46→
+    47→type ImportRow = {
+    48→  kodeAkun: string;
+    49→  namaAkun: string;
+    50→  kategori: string;
+    51→  anggaran: number;
+    52→  realisasi: number;
+    53→};
+    54→
+    55→type ImportDialogProps = {
+    56→  open: boolean;
+    57→  onOpenChange: (open: boolean) => void;
+    58→  jenis: JenisData;
+    59→  tahunAnggaranId: string | null;
+    60→  onSuccess: () => void;
+    61→};
+    62→
+    63→const jenisLabels: Record<JenisData, string> = {
+    64→  pendapatan: "Pendapatan",
+    65→  belanja: "Belanja",
+    66→  pembiayaan: "Pembiayaan",
+    67→};
+    68→
+    69→const jenisColors: Record<JenisData, string> = {
+    70→  pendapatan: "bg-emerald-500",
+    71→  belanja: "bg-red-500",
+    72→  pembiayaan: "bg-amber-500",
+    73→};
+    74→
+    75→const jenisGradients: Record<JenisData, string> = {
+    76→  pendapatan: "from-emerald-500 to-green-600",
+    77→  belanja: "from-red-500 to-rose-600",
+    78→  pembiayaan: "from-amber-500 to-orange-500",
+    79→};
+    80→
+    81→export default function ImportDialog({
+    82→  open,
+    83→  onOpenChange,
+    84→  jenis,
+    85→  tahunAnggaranId,
+    86→  onSuccess,
+    87→}: ImportDialogProps) {
+    88→  const { toast } = useToast();
+    89→  const { pengaturan } = usePengaturan();
+    90→  const { user } = useAuth();
+    91→  const fileInputRef = useRef<HTMLInputElement>(null);
+    92→
+    93→  const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
+    94→  const [mode, setMode] = useState<"upsert" | "replace">("upsert");
+    95→  const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
+    96→  const [parseErrors, setParseErrors] = useState<string[]>([]);
+    97→  const [importing, setImporting] = useState(false);
+    98→  const [result, setResult] = useState<{
+    99→    success: boolean;
+   100→    imported: number;
+   101→    created: number;
+   102→    updated: number;
+   103→    message: string;
+   104→  } | null>(null);
+   105→  const [dragOver, setDragOver] = useState(false);
+   106→  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+   107→
+   108→  // OPD selection
+   109→  const [opdList, setOpdList] = useState<Array<{ id: string; kodeOpd: string; namaOpd: string }>>([]);
+   110→  const [selectedOpdId, setSelectedOpdId] = useState<string>("");
+   111→  const [opdLoading, setOpdLoading] = useState(false);
+   112→
+   113→  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+   114→  const isOpdUser = user?.role === "opd";
+   115→
+   116→  // Fetch OPD list when dialog opens
+   117→  useEffect(() => {
+   118→    if (open && isAdmin && tahunAnggaranId) {
+   119→      setOpdLoading(true);
+   120→      fetch(`/api/admin/opd-list?tahunAnggaranId=${tahunAnggaranId}`)
+   121→        .then(res => res.json())
+   122→        .then(data => { if (data.data) setOpdList(data.data); })
+   123→        .catch(() => {})
+   124→        .finally(() => setOpdLoading(false));
+   125→    }
+   126→  }, [open, isAdmin, tahunAnggaranId]);
+   127→
+   128→  const reset = useCallback(() => {
+   129→    setStep("upload");
+   130→    setParsedRows([]);
+   131→    setParseErrors([]);
+   132→    setImporting(false);
+   133→    setResult(null);
+   134→    setMode("upsert");
+   135→    setUploadedFileName("");
+   136→    setSelectedOpdId("");
+   137→  }, []);
+   138→
+   139→  const handleClose = () => {
+   140→    onOpenChange(false);
+   141→    reset();
+   142→  };
+   143→
+   144→  const downloadTemplate = async (format: 'xlsx' | 'csv') => {
+   145→    try {
+   146→      const res = await fetch(`/api/admin/import/template?jenis=${jenis}&format=${format}`, { credentials: 'include' });
+   147→      if (!res.ok) throw new Error("Gagal mengunduh template");
+   148→      const blob = await res.blob();
+   149→      const url = URL.createObjectURL(blob);
+   150→      const a = document.createElement("a");
+   151→      a.href = url;
+   152→      a.download = `template_${jenis}.${format}`;
+   153→      document.body.appendChild(a);
+   154→      a.click();
+   155→      document.body.removeChild(a);
+   156→      URL.revokeObjectURL(url);
+   157→      toast({
+   158→        title: "Berhasil",
+   159→        description: `Template ${format.toUpperCase()} berhasil diunduh`,
+   160→      });
+   161→    } catch (err) {
+   162→      toast({
+   163→        title: "Error",
+   164→        description: err instanceof Error ? err.message : "Gagal mengunduh template",
+   165→        variant: "destructive",
+   166→      });
+   167→    }
+   168→  };
+   169→
+   170→  /**
+   171→   * Split a CSV line respecting quoted fields.
+   172→   * Supports both comma and semicolon as delimiter (auto-detect).
+   173→   * Quoted fields (e.g., "31.500,5") are preserved as single values.
+   174→   */
+   175→  const splitCSVLine = (line: string, delimiter: string): string[] => {
+   176→    const result: string[] = [];
+   177→    let current = '';
+   178→    let inQuotes = false;
+   179→
+   180→    for (let i = 0; i < line.length; i++) {
+   181→      const ch = line[i];
+   182→      if (ch === '"') {
+   183→        if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+   184→          // Escaped quote
+   185→          current += '"';
+   186→          i++;
+   187→        } else {
+   188→          inQuotes = !inQuotes;
+   189→        }
+   190→      } else if (ch === delimiter && !inQuotes) {
+   191→        result.push(current.trim());
+   192→        current = '';
+   193→      } else {
+   194→        current += ch;
+   195→      }
+   196→    }
+   197→    result.push(current.trim());
+   198→    return result;
+   199→  };
+   200→
+   201→  const parseCSV = (text: string): { rows: ImportRow[]; errors: string[] } => {
+   202→    const lines = text
+   203→      .split("\n")
+   204→      .map((l) => l.trim())
+   205→      .filter((l) => l && !l.startsWith("#"));
+   206→
+   207→    if (lines.length === 0) {
+   208→      return { rows: [], errors: ["File kosong"] };
+   209→    }
+   210→
+   211→    // Auto-detect delimiter: if first data line has semicolons, use semicolon
+   212→    // This is common in Indonesian/European CSV where comma is the decimal separator
+   213→    const firstDataLine = lines.find(l => !l.startsWith('#')) || '';
+   214→    const delimiter = firstDataLine.includes(';') ? ';' : ',';
+   215→
+   216→    // Skip header line
+   217→    const dataLines = lines.slice(1);
+   218→    const rows: ImportRow[] = [];
+   219→    const errors: string[] = [];
+   220→
+   221→    dataLines.forEach((line, idx) => {
+   222→      const cols = splitCSVLine(line, delimiter);
+   223→      if (cols.length < 5) {
+   224→        errors.push(`Baris ${idx + 2}: Kolom tidak lengkap (butuh 5 kolom)`);
+   225→        return;
+   226→      }
+   227→
+   228→      const [kodeAkun, namaAkun, kategori, anggaranStr, realisasiStr] = cols;
+   229→
+   230→      if (!kodeAkun) {
+   231→        errors.push(`Baris ${idx + 2}: Kode Akun kosong`);
+   232→        return;
+   233→      }
+   234→      if (!namaAkun) {
+   235→        errors.push(`Baris ${idx + 2}: Nama Akun kosong`);
+   236→        return;
+   237→      }
+   238→      if (!kategori) {
+   239→        errors.push(`Baris ${idx + 2}: Kategori kosong`);
+   240→        return;
+   241→      }
+   242→
+   243→      const anggaran = parseNumber(anggaranStr);
+   244→      const realisasi = parseNumber(realisasiStr);
+   245→
+   246→      if (isNaN(anggaran) || anggaran < 0) {
+   247→        errors.push(`Baris ${idx + 2}: Anggaran tidak valid ("${anggaranStr}")`);
+   248→        return;
+   249→      }
+   250→      if (isNaN(realisasi) || realisasi < 0) {
+   251→        errors.push(`Baris ${idx + 2}: Realisasi tidak valid ("${realisasiStr}")`);
+   252→        return;
+   253→      }
+   254→
+   255→      rows.push({ kodeAkun, namaAkun, kategori, anggaran, realisasi });
+   256→    });
+   257→
+   258→    return { rows, errors };
+   259→  };
+   260→
+   261→  const parseXLSX = (data: ArrayBuffer): { rows: ImportRow[]; errors: string[] } => {
+   262→    try {
+   263→      const workbook = XLSX.read(data, { type: 'array' });
+   264→
+   265→      // Try to find the "Template Data" sheet first, otherwise use first sheet
+   266→      let sheetName = workbook.SheetNames.find(name =>
+   267→        name.toLowerCase().includes('template') || name.toLowerCase().includes('data')
+   268→      );
+   269→      if (!sheetName) {
+   270→        sheetName = workbook.SheetNames[0];
+   271→      }
+   272→
+   273→      const ws = workbook.Sheets[sheetName];
+   274→      if (!ws) {
+   275→        return { rows: [], errors: ["Sheet tidak ditemukan dalam file"] };
+   276→      }
+   277→
+   278→      // Convert sheet to array of arrays
+   279→      const sheetData: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+   280→
+   281→      if (sheetData.length === 0) {
+   282→        return { rows: [], errors: ["File kosong"] };
+   283→      }
+   284→
+   285→      // Skip header row (first row)
+   286→      const dataRows = sheetData.slice(1);
+   287→      const rows: ImportRow[] = [];
+   288→      const errors: string[] = [];
+   289→
+   290→      dataRows.forEach((row, idx) => {
+   291→        // Skip empty rows (but keep rows where anggaran/realisasi is 0)
+   292→        if (!row || row.length === 0 || row.every(cell => cell == null || cell === '')) {
+   293→          return;
+   294→        }
+   295→
+   296→        const kodeAkun = String(row[0] ?? '').trim();
+   297→        const namaAkun = String(row[1] ?? '').trim();
+   298→        const kategori = String(row[2] ?? '').trim();
+   299→        // Use ?? instead of || to preserve 0 values (0 || '' evaluates to '')
+   300→        const anggaranStr = String(row[3] ?? '').trim();
+   301→        const realisasiStr = String(row[4] ?? '').trim();
+   302→
+   303→        // Skip rows with no kode akun (likely empty template rows)
+   304→        if (!kodeAkun) return;
+   305→
+   306→        if (!namaAkun) {
+   307→          errors.push(`Baris ${idx + 2}: Nama Akun kosong`);
+   308→          return;
+   309→        }
+   310→        if (!kategori) {
+   311→          errors.push(`Baris ${idx + 2}: Kategori kosong`);
+   312→          return;
+   313→        }
+   314→
+   315→        const anggaran = parseNumber(anggaranStr);
+   316→        const realisasi = parseNumber(realisasiStr);
+   317→
+   318→        if (isNaN(anggaran) || anggaran < 0) {
+   319→          errors.push(`Baris ${idx + 2}: Anggaran tidak valid ("${anggaranStr}")`);
+   320→          return;
+   321→        }
+   322→        if (isNaN(realisasi) || realisasi < 0) {
+   323→          errors.push(`Baris ${idx + 2}: Realisasi tidak valid ("${realisasiStr}")`);
+   324→          return;
+   325→        }
+   326→
+   327→        rows.push({ kodeAkun, namaAkun, kategori, anggaran, realisasi });
+   328→      });
+   329→
+   330→      return { rows, errors };
+   331→    } catch (err) {
+   332→      return { rows: [], errors: [`Gagal membaca file XLSX: ${err instanceof Error ? err.message : 'Unknown error'}`] };
+   333→    }
+   334→  };
+   335→
+   336→  const parseNumber = (str: string): number => {
+   337→    if (!str || !str.trim()) return NaN;
+   338→    // Remove "Rp" / "Rp." prefix and whitespace
+   339→    let cleaned = str.replace(/Rp\.?\s*/gi, '').trim();
+   340→    // Remove dots as thousand separators (Indonesian format: 31.500.000.000)
+   341→    cleaned = cleaned.replace(/\./g, '');
+   342→    // Replace comma with dot as decimal separator (Indonesian format: 31500,5 → 31500.5)
+   343→    cleaned = cleaned.replace(/,/g, '.');
+   344→    const num = parseFloat(cleaned);
+   345→    return num;
+   346→  };
+   347→
+   348→  const handleFile = (file: File) => {
+   349→    const isXLSX = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+   350→    const isCSV = file.name.endsWith('.csv') || file.name.endsWith('.txt');
+   351→
+   352→    if (!isXLSX && !isCSV) {
+   353→      toast({
+   354→        title: "Format Salah",
+   355→        description: "Hanya file XLSX (Excel) dan CSV yang didukung",
+   356→        variant: "destructive",
+   357→      });
+   358→      return;
+   359→    }
+   360→
+   361→    setUploadedFileName(file.name);
+   362→
+   363→    if (isXLSX) {
+   364→      const reader = new FileReader();
+   365→      reader.onload = (e) => {
+   366→        const data = e.target?.result as ArrayBuffer;
+   367→        const { rows, errors } = parseXLSX(data);
+   368→        setParseErrors(errors);
+   369→        setParsedRows(rows);
+   370→
+   371→        if (rows.length > 0) {
+   372→          setStep("preview");
+   373→        } else if (errors.length > 0) {
+   374→          toast({
+   375→            title: "Gagal Membaca File",
+   376→            description: "Tidak ada data valid yang dapat diimpor",
+   377→            variant: "destructive",
+   378→          });
+   379→        } else {
+   380→          toast({
+   381→            title: "File Kosong",
+   382→            description: "Tidak ada data ditemukan dalam file Excel",
+   383→            variant: "destructive",
+   384→          });
+   385→        }
+   386→      };
+   387→      reader.readAsArrayBuffer(file);
+   388→    } else {
+   389→      // CSV
+   390→      const reader = new FileReader();
+   391→      reader.onload = (e) => {
+   392→        const text = e.target?.result as string;
+   393→        const { rows, errors } = parseCSV(text);
+   394→        setParseErrors(errors);
+   395→        setParsedRows(rows);
+   396→
+   397→        if (rows.length > 0) {
+   398→          setStep("preview");
+   399→        } else if (errors.length > 0) {
+   400→          toast({
+   401→            title: "Gagal Membaca File",
+   402→            description: "Tidak ada data valid yang dapat diimpor",
+   403→            variant: "destructive",
+   404→          });
+   405→        }
+   406→      };
+   407→      reader.readAsText(file);
+   408→    }
+   409→  };
+   410→
+   411→  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+   412→    const file = e.target.files?.[0];
+   413→    if (file) handleFile(file);
+   414→    // Reset the input so the same file can be re-selected
+   415→    e.target.value = "";
+   416→  };
+   417→
+   418→  const handleDrop = (e: React.DragEvent) => {
+   419→    e.preventDefault();
+   420→    setDragOver(false);
+   421→    const file = e.dataTransfer.files?.[0];
+   422→    if (file) handleFile(file);
+   423→  };
+   424→
+   425→  const handleDragOver = (e: React.DragEvent) => {
+   426→    e.preventDefault();
+   427→    setDragOver(true);
+   428→  };
+   429→
+   430→  const handleDragLeave = () => {
+   431→    setDragOver(false);
+   432→  };
+   433→
+   434→  const removeRow = (index: number) => {
+   435→    setParsedRows((prev) => prev.filter((_, i) => i !== index));
+   436→  };
+   437→
+   438→  const handleImport = async () => {
+   439→    if (!tahunAnggaranId || parsedRows.length === 0) return;
+   440→
+   441→    setImporting(true);
+   442→    try {
+   443→      const res = await fetch("/api/admin/import", {
+   444→        method: "POST",
+   445→        headers: { "Content-Type": "application/json" },
+   446→        credentials: "include",
+   447→        body: JSON.stringify({
+   448→          jenis,
+   449→          tahunAnggaranId,
+   450→          rows: parsedRows,
+   451→          mode,
+   452→          opdId: selectedOpdId && selectedOpdId !== "__none__" ? selectedOpdId : null,
+   453→        }),
+   454→      });
+   455→
+   456→      const json = await res.json();
+   457→
+   458→      if (!res.ok) {
+   459→        if (json.validationErrors) {
+   460→          const errMsg = json.validationErrors
+   461→            .slice(0, 5)
+   462→            .map((v: { row: number; error: string }) => `Baris ${v.row}: ${v.error}`)
+   463→            .join("\n");
+   464→          throw new Error(`Validasi gagal:\n${errMsg}`);
+   465→        }
+   466→        throw new Error(json.error || "Gagal mengimpor data");
+   467→      }
+   468→
+   469→      setResult({
+   470→        success: true,
+   471→        imported: json.imported,
+   472→        created: json.created || 0,
+   473→        updated: json.updated || 0,
+   474→        message: json.message,
+   475→      });
+   476→      setStep("result");
+   477→      onSuccess();
+   478→    } catch (err) {
+   479→      toast({
+   480→        title: "Gagal Import",
+   481→        description: err instanceof Error ? err.message : "Terjadi kesalahan",
+   482→        variant: "destructive",
+   483→      });
+   484→      setResult({
+   485→        success: false,
+   486→        imported: 0,
+   487→        created: 0,
+   488→        updated: 0,
+   489→        message: err instanceof Error ? err.message : "Terjadi kesalahan",
+   490→      });
+   491→      setStep("result");
+   492→    } finally {
+   493→      setImporting(false);
+   494→    }
+   495→  };
+   496→
+   497→  const formatRupiah = (value: number) => {
+   498→    if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)} T`;
+   499→    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} M`;
+   500→    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} Jt`;
+   501→    return value.toLocaleString("id-ID");
+   502→  };
+   503→
+   504→  return (
+   505→    <Dialog open={open} onOpenChange={handleClose}>
+   506→      <DialogContent className="sm:max-w-2xl max-h-[85vh]">
+   507→        <DialogHeader>
+   508→          <DialogTitle className="flex items-center gap-2">
+   509→            <div className={`w-2.5 h-2.5 rounded-full ${jenisColors[jenis]}`} />
+   510→            Import Data {jenisLabels[jenis]}
+   511→          </DialogTitle>
+   512→          <DialogDescription>
+   513→            Impor data {jenisLabels[jenis]} dari file Excel (.xlsx) atau CSV
+   514→          </DialogDescription>
+   515→        </DialogHeader>
+   516→
+   517→        <AnimatePresence mode="wait">
+   518→          {/* ====== STEP 1: UPLOAD ====== */}
+   519→          {step === "upload" && (
+   520→            <motion.div
+   521→              key="upload"
+   522→              initial={{ opacity: 0, x: -20 }}
+   523→              animate={{ opacity: 1, x: 0 }}
+   524→              exit={{ opacity: 0, x: 20 }}
+   525→              className="space-y-4"
+   526→            >
+   527→              {/* OPD Selection for Admin/Superadmin */}
+   528→              {isAdmin && (
+   529→                <div className="space-y-2">
+   530→                  <Label className="flex items-center gap-2 text-sm font-medium">
+   531→                    <Building2 className="w-4 h-4" />
+   532→                    OPD Tujuan Import
+   533→                  </Label>
+   534→                  <div className="flex items-center gap-2 mb-1">
+   535→                    <Badge variant="outline" className="text-xs">
+   536→                      <ShieldCheck className="w-3 h-3 mr-1" />
+   537→                      {user?.role === "superadmin" ? "Super Admin" : "Admin"} — dapat memilih OPD
+   538→                    </Badge>
+   539→                  </div>
+   540→                  {opdLoading ? (
+   541→                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   542→                      <Loader2 className="w-4 h-4 animate-spin" />
+   543→                      Memuat daftar OPD...
+   544→                    </div>
+   545→                  ) : (
+   546→                    <Select value={selectedOpdId} onValueChange={setSelectedOpdId}>
+   547→                      <SelectTrigger>
+   548→                        <SelectValue placeholder="-- Tanpa OPD (Data Global) --" />
+   549→                      </SelectTrigger>
+   550→                      <SelectContent>
+   551→                        <SelectItem value="__none__">-- Tanpa OPD (Data Global) --</SelectItem>
+   552→                        {opdList.map(opd => (
+   553→                          <SelectItem key={opd.id} value={opd.id}>
+   554→                            {opd.kodeOpd} — {opd.namaOpd}
+   555→                          </SelectItem>
+   556→                        ))}
+   557→                      </SelectContent>
+   558→                    </Select>
+   559→                  )}
+   560→                </div>
+   561→              )}
+   562→
+   563→              {/* OPD User Info */}
+   564→              {isOpdUser && (
+   565→                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+   566→                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+   567→                    <ShieldX className="w-4 h-4" />
+   568→                    OPD User — Data hanya dapat diimpor ke OPD Anda sendiri
+   569→                  </div>
+   570→                </div>
+   571→              )}
+   572→
+   573→              {/* Download template - Professional dual format card */}
+   574→              <div className="rounded-xl border bg-gradient-to-br from-muted/30 to-muted/10 overflow-hidden">
+   575→                <div className={`px-4 py-2.5 bg-gradient-to-r ${jenisGradients[jenis]}`}>
+   576→                  <div className="flex items-center gap-2 text-white">
+   577→                    <FileDown className="w-4 h-4" />
+   578→                    <span className="text-sm font-semibold">Unduh Template Import</span>
+   579→                  </div>
+   580→                </div>
+   581→                <div className="p-4 space-y-3">
+   582→                  <p className="text-xs text-muted-foreground">
+   583→                    Pilih format template yang ingin Anda unduh, isi data, lalu upload kembali:
+   584→                  </p>
+   585→                  <div className="grid grid-cols-2 gap-3">
+   586→                    {/* XLSX Template */}
+   587→                    <button
+   588→                      onClick={() => downloadTemplate('xlsx')}
+   589→                      className="group flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 hover:border-emerald-400 transition-all duration-200"
+   590→                    >
+   591→                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+   592→                        <FileSpreadsheet className="w-6 h-6 text-white" />
+   593→                      </div>
+   594→                      <div className="text-center">
+   595→                        <p className="text-sm font-bold text-emerald-700">Excel (.xlsx)</p>
+   596→                        <p className="text-[10px] text-emerald-600/70 mt-0.5">Direkomendasikan</p>
+   597→                      </div>
+   598→                      <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300 gap-1">
+   599→                        <Download className="w-2.5 h-2.5" />
+   600→                        XLSX
+   601→                      </Badge>
+   602→                    </button>
+   603→
+   604→                    {/* CSV Template */}
+   605→                    <button
+   606→                      onClick={() => downloadTemplate('csv')}
+   607→                      className="group flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-blue-200 bg-blue-50/50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
+   608→                    >
+   609→                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+   610→                        <FileDown className="w-6 h-6 text-white" />
+   611→                      </div>
+   612→                      <div className="text-center">
+   613→                        <p className="text-sm font-bold text-blue-700">CSV (.csv)</p>
+   614→                        <p className="text-[10px] text-blue-600/70 mt-0.5">Format sederhana</p>
+   615→                      </div>
+   616→                      <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-700 border-blue-300 gap-1">
+   617→                        <Download className="w-2.5 h-2.5" />
+   618→                        CSV
+   619→                      </Badge>
+   620→                    </button>
+   621→                  </div>
+   622→                </div>
+   623→              </div>
+   624→
+   625→              {/* Upload area */}
+   626→              <div
+   627→                className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${
+   628→                  dragOver
+   629→                    ? "border-primary bg-primary/5 scale-[1.02]"
+   630→                    : "border-muted-foreground/25 hover:border-muted-foreground/40"
+   631→                }`}
+   632→                onDrop={handleDrop}
+   633→                onDragOver={handleDragOver}
+   634→                onDragLeave={handleDragLeave}
+   635→              >
+   636→                <motion.div
+   637→                  animate={dragOver ? { scale: 1.1 } : { scale: 1 }}
+   638→                  transition={{ duration: 0.2 }}
+   639→                >
+   640→                  <Upload
+   641→                    className={`w-10 h-10 mx-auto mb-3 ${
+   642→                      dragOver ? "text-primary" : "text-muted-foreground/50"
+   643→                    }`}
+   644→                  />
+   645→                </motion.div>
+   646→                <p className="text-sm font-medium mb-1">
+   647→                  Drag & drop file Excel/CSV di sini
+   648→                </p>
+   649→                <p className="text-xs text-muted-foreground mb-3">
+   650→                  atau klik untuk memilih file (.xlsx, .csv)
+   651→                </p>
+   652→                <Button
+   653→                  variant="outline"
+   654→                  size="sm"
+   655→                  onClick={() => fileInputRef.current?.click()}
+   656→                  className="gap-1.5"
+   657→                >
+   658→                  <Upload className="w-3.5 h-3.5" />
+   659→                  Pilih File
+   660→                </Button>
+   661→                <input
+   662→                  ref={fileInputRef}
+   663→                  type="file"
+   664→                  accept=".xlsx,.xls,.csv,.txt"
+   665→                  className="hidden"
+   666→                  onChange={handleFileChange}
+   667→                />
+   668→              </div>
+   669→
+   670→              {/* Format info */}
+   671→              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+   672→                <div className="flex items-start gap-2">
+   673→                  <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+   674→                  <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+   675→                    <p className="font-medium">Format yang didukung:</p>
+   676→                    <div className="grid grid-cols-2 gap-2">
+   677→                      <div>
+   678→                        <p className="font-semibold text-emerald-700">Excel (.xlsx)</p>
+   679→                        <p>Template dengan petunjuk & contoh data</p>
+   680→                      </div>
+   681→                      <div>
+   682→                        <p className="font-semibold text-blue-700">CSV (.csv)</p>
+   683→                        <p>Kode Akun, Nama Akun, Kategori, Anggaran, Realisasi</p>
+   684→                      </div>
+   685→                    </div>
+   686→                    <p className="mt-1">Anggaran & Realisasi: angka tanpa prefix Rp. Mendukung koma desimal (contoh: 31500000000 atau 31.500.000.000,5). Nilai 0 juga dapat diimpor.</p>
+   687→                  </div>
+   688→                </div>
+   689→              </div>
+   690→            </motion.div>
+   691→          )}
+   692→
+   693→          {/* ====== STEP 2: PREVIEW ====== */}
+   694→          {step === "preview" && (
+   695→            <motion.div
+   696→              key="preview"
+   697→              initial={{ opacity: 0, x: -20 }}
+   698→              animate={{ opacity: 1, x: 0 }}
+   699→              exit={{ opacity: 0, x: 20 }}
+   700→              className="space-y-4"
+   701→            >
+   702→              {/* Parse errors */}
+   703→              {parseErrors.length > 0 && (
+   704→                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+   705→                  <div className="flex items-start gap-2">
+   706→                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+   707→                    <div className="text-xs text-amber-700 dark:text-amber-300">
+   708→                      <p className="font-medium mb-1">
+   709→                        {parseErrors.length} baris dilewati:
+   710→                      </p>
+   711→                      <div className="max-h-20 overflow-y-auto custom-scrollbar space-y-0.5">
+   712→                        {parseErrors.map((err, i) => (
+   713→                          <p key={i}>{err}</p>
+   714→                        ))}
+   715→                      </div>
+   716→                    </div>
+   717→                  </div>
+   718→                </div>
+   719→              )}
+   720→
+   721→              {/* Preview summary */}
+   722→              <div className="flex items-center justify-between">
+   723→                <div className="flex items-center gap-2">
+   724→                  <Badge variant="secondary" className="gap-1">
+   725→                    <Eye className="w-3 h-3" />
+   726→                    Preview
+   727→                  </Badge>
+   728→                  <span className="text-sm font-medium">
+   729→                    {parsedRows.length} baris data
+   730→                  </span>
+   731→                  {uploadedFileName && (
+   732→                    <span className="text-xs text-muted-foreground">
+   733→                      dari {uploadedFileName}
+   734→                    </span>
+   735→                  )}
+   736→                </div>
+   737→                <Button
+   738→                  variant="ghost"
+   739→                  size="sm"
+   740→                  onClick={() => {
+   741→                    setStep("upload");
+   742→                    setParsedRows([]);
+   743→                    setParseErrors([]);
+   744→                    setUploadedFileName("");
+   745→                  }}
+   746→                  className="text-xs"
+   747→                >
+   748→                  Ganti File
+   749→                </Button>
+   750→              </div>
+   751→
+   752→              {/* Import mode */}
+   753→              <div className="rounded-lg border overflow-hidden">
+   754→                <div className="px-3 py-2 bg-muted/50 border-b">
+   755→                  <span className="text-xs font-semibold text-foreground">
+   756→                    Mode Import
+   757→                  </span>
+   758→                </div>
+   759→                <div className="p-3 space-y-2">
+   760→                  <div className="flex gap-2">
+   761→                    <button
+   762→                      onClick={() => setMode("upsert")}
+   763→                      className={`flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+   764→                        mode === "upsert"
+   765→                          ? "bg-emerald-50 border-emerald-400 text-emerald-700 shadow-sm"
+   766→                          : "bg-card border-border hover:bg-muted/50"
+   767→                      }`}
+   768→                    >
+   769→                      <div className={`w-5 h-5 rounded flex items-center justify-center ${
+   770→                        mode === "upsert" ? "bg-emerald-500" : "bg-muted"
+   771→                      }`}>
+   772→                        <Plus className="w-3 h-3 text-white" />
+   773→                      </div>
+   774→                      <div className="text-left">
+   775→                        <div className="font-bold">Timpa Data Sama</div>
+   776→                        <div className={`text-[10px] ${mode === "upsert" ? "text-emerald-600" : "text-muted-foreground"}`}>
+   777→                          Data baru ditambah, data sama ditimpa
+   778→                        </div>
+   779→                      </div>
+   780→                    </button>
+   781→                    <button
+   782→                      onClick={() => setMode("replace")}
+   783→                      className={`flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border-2 ${
+   784→                        mode === "replace"
+   785→                          ? "bg-red-50 border-red-400 text-red-700 shadow-sm"
+   786→                          : "bg-card border-border hover:bg-muted/50"
+   787→                      }`}
+   788→                    >
+   789→                      <div className={`w-5 h-5 rounded flex items-center justify-center ${
+   790→                        mode === "replace" ? "bg-red-500" : "bg-muted"
+   791→                      }`}>
+   792→                        <Trash2 className="w-3 h-3 text-white" />
+   793→                      </div>
+   794→                      <div className="text-left">
+   795→                        <div className="font-bold">Ganti Semua</div>
+   796→                        <div className={`text-[10px] ${mode === "replace" ? "text-red-600" : "text-muted-foreground"}`}>
+   797→                          Hapus semua data lama, ganti baru
+   798→                        </div>
+   799→                      </div>
+   800→                    </button>
+   801→                  </div>
+   802→                  {mode === "upsert" && (
+   803→                    <div className="flex items-start gap-2 p-2 rounded-md bg-emerald-50/80 border border-emerald-200">
+   804→                      <AlertCircle className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+   805→                      <p className="text-[10px] text-emerald-700">
+   806→                        Data dengan <strong>Kode Akun</strong> dan <strong>Kategori</strong> yang sama akan <strong>ditimpa</strong> dengan data baru. Data yang berbeda akan ditambahkan.
+   807→                      </p>
+   808→                    </div>
+   809→                  )}
+   810→                  {mode === "replace" && (
+   811→                    <div className="flex items-start gap-2 p-2 rounded-md bg-red-50/80 border border-red-200">
+   812→                      <AlertCircle className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
+   813→                      <p className="text-[10px] text-red-700">
+   814→                        <strong>Peringatan:</strong> Semua data lama akan dihapus terlebih dahulu sebelum data baru diimpor. Tindakan ini tidak dapat dibatalkan.
+   815→                      </p>
+   816→                    </div>
+   817→                  )}
+   818→                </div>
+   819→              </div>
+   820→
+   821→              {/* Data preview table */}
+   822→              <div className="border rounded-lg overflow-hidden">
+   823→                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+   824→                  <table className="w-full text-xs">
+   825→                    <thead className="bg-muted/80 sticky top-0">
+   826→                      <tr>
+   827→                        <th className="text-left p-2 font-semibold w-8">#</th>
+   828→                        <th className="text-left p-2 font-semibold">Kode Akun</th>
+   829→                        <th className="text-left p-2 font-semibold">Nama Akun</th>
+   830→                        <th className="text-left p-2 font-semibold">Kategori</th>
+   831→                        <th className="text-right p-2 font-semibold">Anggaran</th>
+   832→                        <th className="text-right p-2 font-semibold">Realisasi</th>
+   833→                        <th className="text-center p-2 font-semibold w-8"></th>
+   834→                      </tr>
+   835→                    </thead>
+   836→                    <tbody>
+   837→                      {parsedRows.map((row, idx) => (
+   838→                        <motion.tr
+   839→                          key={idx}
+   840→                          className="border-t hover:bg-muted/30 transition-colors"
+   841→                          initial={{ opacity: 0, y: 5 }}
+   842→                          animate={{ opacity: 1, y: 0 }}
+   843→                          transition={{ delay: Math.min(idx * 0.02, 0.5) }}
+   844→                        >
+   845→                          <td className="p-2 text-muted-foreground">{idx + 1}</td>
+   846→                          <td className="p-2 font-mono">{row.kodeAkun}</td>
+   847→                          <td className="p-2 max-w-[150px] truncate">{row.namaAkun}</td>
+   848→                          <td className="p-2">
+   849→                            <Badge variant="outline" className="text-[10px] h-5">
+   850→                              {row.kategori}
+   851→                            </Badge>
+   852→                          </td>
+   853→                          <td className="p-2 text-right font-mono">
+   854→                            {formatRupiah(row.anggaran)}
+   855→                          </td>
+   856→                          <td className="p-2 text-right font-mono">
+   857→                            {formatRupiah(row.realisasi)}
+   858→                          </td>
+   859→                          <td className="p-2 text-center">
+   860→                            <button
+   861→                              onClick={() => removeRow(idx)}
+   862→                              className="text-muted-foreground hover:text-destructive transition-colors"
+   863→                            >
+   864→                              <X className="w-3.5 h-3.5" />
+   865→                            </button>
+   866→                          </td>
+   867→                        </motion.tr>
+   868→                      ))}
+   869→                    </tbody>
+   870→                  </table>
+   871→                </div>
+   872→              </div>
+   873→            </motion.div>
+   874→          )}
+   875→
+   876→          {/* ====== STEP 3: RESULT ====== */}
+   877→          {step === "result" && result && (
+   878→            <motion.div
+   879→              key="result"
+   880→              initial={{ opacity: 0, scale: 0.95 }}
+   881→              animate={{ opacity: 1, scale: 1 }}
+   882→              className="py-6 text-center space-y-4"
+   883→            >
+   884→              {result.success ? (
+   885→                <>
+   886→                  <motion.div
+   887→                    initial={{ scale: 0 }}
+   888→                    animate={{ scale: 1 }}
+   889→                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+   890→                  >
+   891→                    <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+   892→                  </motion.div>
+   893→                  <h3 className="text-lg font-bold text-emerald-700">
+   894→                    Import Berhasil!
+   895→                  </h3>
+   896→                  <p className="text-sm text-muted-foreground">
+   897→                    {result.message}
+   898→                  </p>
+   899→                  <div className="flex items-center justify-center gap-4 mt-4">
+   900→                    <div className="text-center p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
+   901→                      <p className="text-2xl font-bold text-emerald-600">
+   902→                        {result.imported}
+   903→                      </p>
+   904→                      <p className="text-xs text-muted-foreground">Total Data</p>
+   905→                    </div>
+   906→                    {mode === "upsert" && (result.created > 0 || result.updated > 0) && (
+   907→                      <>
+   908→                        <div className="text-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+   909→                          <p className="text-2xl font-bold text-blue-600">
+   910→                            {result.created}
+   911→                          </p>
+   912→                          <p className="text-xs text-muted-foreground">Data Baru</p>
+   913→                        </div>
+   914→                        <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+   915→                          <p className="text-2xl font-bold text-amber-600">
+   916→                            {result.updated}
+   917→                          </p>
+   918→                          <p className="text-xs text-muted-foreground">Ditimpa</p>
+   919→                        </div>
+   920→                      </>
+   921→                    )}
+   922→                  </div>
+   923→                </>
+   924→              ) : (
+   925→                <>
+   926→                  <motion.div
+   927→                    initial={{ scale: 0 }}
+   928→                    animate={{ scale: 1 }}
+   929→                    transition={{ type: "spring", stiffness: 200, damping: 15 }}
+   930→                  >
+   931→                    <AlertCircle className="w-16 h-16 text-destructive mx-auto" />
+   932→                  </motion.div>
+   933→                  <h3 className="text-lg font-bold text-destructive">
+   934→                    Import Gagal
+   935→                  </h3>
+   936→                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+   937→                    {result.message}
+   938→                  </p>
+   939→                </>
+   940→              )}
+   941→            </motion.div>
+   942→          )}
+   943→        </AnimatePresence>
+   944→
+   945→        <DialogFooter>
+   946→          {step === "upload" && (
+   947→            <Button variant="outline" onClick={handleClose}>
+   948→              Batal
+   949→            </Button>
+   950→          )}
+   951→          {step === "preview" && (
+   952→            <>
+   953→              <Button variant="outline" onClick={() => { setStep("upload"); setParsedRows([]); setParseErrors([]); setUploadedFileName(""); }}>
+   954→                Kembali
+   955→              </Button>
+   956→              <Button
+   957→                onClick={handleImport}
+   958→                disabled={importing || parsedRows.length === 0}
+   959→                className="text-white gap-1.5"
+   960→                style={{ backgroundColor: pengaturan.warnaPrimary }}
+   961→              >
+   962→                {importing ? (
+   963→                  <>
+   964→                    <Loader2 className="w-4 h-4 animate-spin" />
+   965→                    Mengimpor...
+   966→                  </>
+   967→                ) : (
+   968→                  <>
+   969→                    <Upload className="w-4 h-4" />
+   970→                    Import {parsedRows.length} Data
+   971→                  </>
+   972→                )}
+   973→              </Button>
+   974→            </>
+   975→          )}
+   976→          {step === "result" && (
+   977→            <Button onClick={handleClose} className="text-white" style={{ backgroundColor: pengaturan.warnaPrimary }}>
+   978→              Selesai
+   979→            </Button>
+   980→          )}
+   981→        </DialogFooter>
+   982→      </DialogContent>
+   983→    </Dialog>
+   984→  );
+   985→}
+   986→

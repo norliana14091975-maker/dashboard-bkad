@@ -62,6 +62,8 @@ type ExtractedAkun = {
   realisasi: number;
   line: number;
   rawLine: string;
+  detectedJenis: JenisData | null;
+  detectedKategori: string;
 };
 
 type ImportRow = {
@@ -70,6 +72,9 @@ type ImportRow = {
   kategori: string;
   anggaran: number;
   realisasi: number;
+  jenis?: JenisData; // for auto-detect mode: which DB model to import into
+  detectedJenis?: JenisData | null;
+  detectedKategori?: string;
 };
 
 type OpdOption = {
@@ -81,7 +86,7 @@ type OpdOption = {
 type PdfImportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  jenis: JenisData;
+  jenis?: JenisData | "auto"; // optional: 'auto' = detect from kode akun
   tahunAnggaranId: string | null;
   onSuccess: () => void;
 };
@@ -109,6 +114,13 @@ const defaultKategori: Record<JenisData, string> = {
   pendapatan: "PAD",
   belanja: "Operasi",
   pembiayaan: "Penerimaan",
+};
+
+// Badge color classes for detected jenis
+const jenisBadgeClasses: Record<JenisData, string> = {
+  pendapatan: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  belanja: "bg-red-100 text-red-800 border-red-300",
+  pembiayaan: "bg-amber-100 text-amber-800 border-amber-300",
 };
 
 // Common kode akun prefixes with labels (standard Indonesian government account codes)
@@ -203,9 +215,16 @@ export default function PdfImportDialog({
   const [opdLoading, setOpdLoading] = useState(false);
   const [opdSearch, setOpdSearch] = useState("");
 
+  // Auto-detect mode
+  const isAutoDetect = !jenis || jenis === "auto";
+  const effectiveJenis = jenis === "auto" ? undefined : jenis;
+
   // Kategori per row (for batch set)
-  const [globalKategori, setGlobalKategori] = useState<string>(defaultKategori[jenis]);
+  const [globalKategori, setGlobalKategori] = useState<string>(effectiveJenis ? defaultKategori[effectiveJenis] : "");
   const [kategoriList, setKategoriList] = useState<string[]>([]);
+
+  // Detected jenis summary from parse
+  const [jenisSummary, setJenisSummary] = useState<Record<string, number>>({});
 
   // Kode akun prefix filter
   const [availablePrefixes, setAvailablePrefixes] = useState<Array<{ prefix: string; label: string; count: number }>>([]);
@@ -239,7 +258,9 @@ export default function PdfImportDialog({
   useEffect(() => {
     if (open) {
       fetchKategoriList();
-      setGlobalKategori(defaultKategori[jenis]);
+      if (effectiveJenis) {
+        setGlobalKategori(defaultKategori[effectiveJenis]);
+      }
     }
   }, [open, jenis]);
 
@@ -263,12 +284,26 @@ export default function PdfImportDialog({
 
   const fetchKategoriList = async () => {
     try {
+      // In auto-detect mode, fetch kategori for all jenis types
+      if (isAutoDetect) {
+        const allKategori: string[] = [];
+        for (const j of ["Pendapatan", "Belanja", "Pembiayaan"] as const) {
+          const res = await fetch(`/api/admin/kategori?jenis=${j}&pageSize=100`);
+          const data = await res.json();
+          if (data.data) {
+            allKategori.push(...data.data.map((k: { namaKategori: string }) => k.namaKategori));
+          }
+        }
+        setKategoriList([...new Set(allKategori)]);
+        return;
+      }
       const jenisMap: Record<JenisData, string> = {
         pendapatan: "Pendapatan",
         belanja: "Belanja",
         pembiayaan: "Pembiayaan",
       };
-      const res = await fetch(`/api/admin/kategori?jenis=${jenisMap[jenis]}&pageSize=100`);
+      if (!effectiveJenis) return;
+      const res = await fetch(`/api/admin/kategori?jenis=${jenisMap[effectiveJenis]}&pageSize=100`);
       const data = await res.json();
       if (data.data) {
         setKategoriList(data.data.map((k: { namaKategori: string }) => k.namaKategori));
@@ -290,7 +325,7 @@ export default function PdfImportDialog({
     setSelectedOpdId("");
     setSelectedRows(new Set());
     setAllSelected(true);
-    setGlobalKategori(defaultKategori[jenis]);
+    setGlobalKategori(effectiveJenis ? defaultKategori[effectiveJenis] : "");
     setAvailablePrefixes([]);
     setSelectedPrefixes(new Set());
     setPrefixFilterEnabled(false);
@@ -402,7 +437,7 @@ export default function PdfImportDialog({
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("jenis", jenis);
+      formData.append("jenis", isAutoDetect ? "auto" : (effectiveJenis || "auto"));
       formData.append("tahunAnggaranId", tahunAnggaranId);
       formData.append("action", "parse");
       if (selectedOpdId && selectedOpdId !== "__none__") {
@@ -427,13 +462,20 @@ export default function PdfImportDialog({
       }
 
       setExtractedData(data.extracted);
-      // Convert to import rows with default kategori
+      setJenisSummary(data.jenisSummary || {});
+
+      // Convert to import rows with auto-detected kategori and jenis
       const rows: ImportRow[] = data.extracted.map((item: ExtractedAkun) => ({
         kodeAkun: item.kodeAkun,
         namaAkun: item.namaAkun,
-        kategori: globalKategori,
+        kategori: isAutoDetect
+          ? (item.detectedKategori || defaultKategori[item.detectedJenis || "pendapatan"])
+          : globalKategori,
         anggaran: item.anggaran || 0,
         realisasi: item.realisasi || 0,
+        jenis: isAutoDetect ? item.detectedJenis : effectiveJenis,
+        detectedJenis: item.detectedJenis,
+        detectedKategori: item.detectedKategori,
       }));
       setImportRows(rows);
       setSelectedRows(new Set(rows.map((_, i) => i)));
@@ -498,10 +540,11 @@ export default function PdfImportDialog({
     try {
       const formData = new FormData();
       formData.append("file", pdfFile);
-      formData.append("jenis", jenis);
+      formData.append("jenis", isAutoDetect ? "auto" : (effectiveJenis || "auto"));
       formData.append("tahunAnggaranId", tahunAnggaranId);
       formData.append("action", "import");
       formData.append("mode", mode);
+      // Include per-row jenis for auto-detect mode
       formData.append("rows", JSON.stringify(selectedImportRows));
       if (selectedOpdId && selectedOpdId !== "__none__") {
         formData.append("opdId", selectedOpdId);
@@ -579,13 +622,13 @@ export default function PdfImportDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${jenisGradients[jenis]} flex items-center justify-center`}>
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${effectiveJenis ? jenisGradients[effectiveJenis] : 'from-sky-500 to-blue-600'} flex items-center justify-center`}>
               <FileText className="w-4 h-4 text-white" />
             </div>
-            Import PDF — {jenisLabels[jenis]}
+            Import PDF{isAutoDetect ? " — Auto-Detect" : ` — ${jenisLabels[effectiveJenis!]}`}
           </DialogTitle>
           <DialogDescription>
-            Upload file PDF untuk mengekstrak kode akun 17 digit (termasuk titik) dan mengimpor data {jenisLabels[jenis].toLowerCase()}
+            Upload file PDF untuk mengekstrak kode akun 17 digit+. {isAutoDetect ? "Kategori (Pendapatan/Belanja/Pembiayaan) akan terdeteksi otomatis dari kode akun." : `Mengimpor data ${jenisLabels[effectiveJenis!].toLowerCase()}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -786,10 +829,31 @@ export default function PdfImportDialog({
               >
                 {/* Summary header */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge className={`${jenisColors[jenis]} text-white`}>
-                      {extractedData.length} kode akun ditemukan ({filteredImportRows.length} ditampilkan)
-                    </Badge>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isAutoDetect ? (
+                      // Show auto-detect summary with per-jenis badges
+                      <>
+                        <Badge className="bg-sky-500 text-white">
+                          {extractedData.length} akun ditemukan
+                        </Badge>
+                        {Object.entries(jenisSummary).map(([j, count]) => {
+                          const jd = j as JenisData;
+                          return (
+                            <Badge
+                              key={j}
+                              variant="outline"
+                              className={`text-xs ${j === 'unknown' ? 'bg-gray-100 text-gray-600 border-gray-300' : jenisBadgeClasses[jd]}`}
+                            >
+                              {j === 'unknown' ? 'Tidak dikenal' : jenisLabels[jd]}: {count}
+                            </Badge>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <Badge className={`${effectiveJenis ? jenisColors[effectiveJenis] : 'bg-sky-500'} text-white`}>
+                        {extractedData.length} kode akun ditemukan ({filteredImportRows.length} ditampilkan)
+                      </Badge>
+                    )}
                     <span className="text-sm text-muted-foreground">
                       {uploadedFileName}
                     </span>
@@ -932,6 +996,7 @@ export default function PdfImportDialog({
                           </TableHead>
                           <TableHead className="w-10">#</TableHead>
                           <TableHead className="min-w-[140px]">Kode Akun</TableHead>
+                          {isAutoDetect && <TableHead className="w-28">Jenis</TableHead>}
                           <TableHead className="min-w-[200px]">Nama Akun</TableHead>
                           <TableHead className="w-32">Kategori</TableHead>
                           <TableHead className="w-32 text-right">Anggaran</TableHead>
@@ -969,6 +1034,22 @@ export default function PdfImportDialog({
                                   )}
                                 </div>
                               </TableCell>
+                              {isAutoDetect && (
+                                <TableCell>
+                                  {row.detectedJenis ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] px-1.5 py-0 ${jenisBadgeClasses[row.detectedJenis]}`}
+                                    >
+                                      {jenisLabels[row.detectedJenis]}
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 border-gray-300">
+                                      ?
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              )}
                               <TableCell>
                                 <Input
                                   value={row.namaAkun}

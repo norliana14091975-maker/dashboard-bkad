@@ -5,8 +5,7 @@ import { syncRealisasiSkpd } from '@/lib/sync-realisasi-skpd'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-
-type JenisData = 'pendapatan' | 'belanja' | 'pembiayaan'
+import { detectJenisFromKodeAkun, detectKategoriFromKodeAkun, type JenisData } from '@/lib/akun-detector'
 
 async function checkAuth() {
   const session = await getServerSession(authOptions)
@@ -58,8 +57,10 @@ export async function POST(request: Request) {
       opdId?: string | null
     }
 
-    if (!jenis || !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis)) {
-      return NextResponse.json({ error: 'jenis must be pendapatan, belanja, or pembiayaan' }, { status: 400 })
+    // jenis can be a specific value or 'auto' for auto-detection
+    const isAutoDetect = jenis === 'auto'
+    if (!jenis || (!isAutoDetect && !['pendapatan', 'belanja', 'pembiayaan'].includes(jenis))) {
+      return NextResponse.json({ error: 'jenis must be pendapatan, belanja, pembiayaan, or auto' }, { status: 400 })
     }
 
     if (!tahunAnggaranId) {
@@ -126,65 +127,78 @@ export async function POST(request: Request) {
 
     const userName = (session.user as { name?: string })?.name || 'Unknown'
 
-    // If replace mode, delete existing data for this OPD/tahun first
-    if (mode === 'replace') {
-      const deleteWhere: Record<string, unknown> = { tahunAnggaranId }
-      if (finalOpdId) {
-        deleteWhere.opdId = finalOpdId
-      }
-      await getDbModel(jenis).deleteMany({ where: deleteWhere })
-    }
+    // Each row may have its own jenis (for auto-detect mode)
+    // The 'jenis' field on each row takes priority; otherwise fall back to the global jenis
+    type ImportRowWithJenis = typeof rows[number] & { jenis?: string }
+    const rowsWithJenis = rows as ImportRowWithJenis[]
 
     let created = 0
     let updated = 0
+    const jenisImported: Record<string, { created: number; updated: number }> = {}
     const historyEntries: Array<{
       recordId: string
       realisasiLama: number
       realisasiBaru: number
       isUpdate: boolean
+      jenis: string
     }> = []
 
+    // If replace mode, delete existing data per-jenis first
     if (mode === 'replace') {
-      // Simple createMany for replace mode (all data was deleted)
-      const createData = rows.map(row => ({
-        tahunAnggaranId,
-        kodeAkun: row.kodeAkun.trim(),
-        namaAkun: row.namaAkun.trim(),
-        kategori: row.kategori.trim(),
-        anggaran: row.anggaran,
-        realisasi: row.realisasi,
-        opdId: finalOpdId,
-      }))
+      const jenisSet = new Set<string>()
+      for (const row of rowsWithJenis) {
+        const rowJenis = row.jenis || jenis
+        if (rowJenis && ['pendapatan', 'belanja', 'pembiayaan'].includes(rowJenis)) {
+          jenisSet.add(rowJenis)
+        }
+      }
+      for (const j of jenisSet) {
+        const deleteWhere: Record<string, unknown> = { tahunAnggaranId }
+        if (finalOpdId) {
+          deleteWhere.opdId = finalOpdId
+        }
+        await getDbModel(j as JenisData).deleteMany({ where: deleteWhere })
+      }
+    }
 
-      await getDbModel(jenis).createMany({ data: createData })
-      created = rows.length
+    // Import rows, routing each to the correct database model based on its jenis
+    for (const row of rowsWithJenis) {
+      const rowJenis = (row.jenis || jenis) as string
+      if (!['pendapatan', 'belanja', 'pembiayaan'].includes(rowJenis)) continue
 
-      // Get created records for history
-      const createdRecords = await getDbModel(jenis).findMany({
-        where: {
-          tahunAnggaranId,
-          ...(finalOpdId ? { opdId: finalOpdId } : {}),
-        },
-        orderBy: { createdAt: 'desc' },
-        take: rows.length,
-      })
+      const dbModel = getDbModel(rowJenis as JenisData)
+      const kodeAkun = row.kodeAkun.trim()
+      const namaAkun = row.namaAkun.trim()
+      const kategori = row.kategori.trim()
 
-      historyEntries.push(
-        ...createdRecords.map(record => ({
+      if (!jenisImported[rowJenis]) {
+        jenisImported[rowJenis] = { created: 0, updated: 0 }
+      }
+
+      if (mode === 'replace') {
+        // In replace mode, just create (we already deleted above)
+        const record = await dbModel.create({
+          data: {
+            tahunAnggaranId,
+            kodeAkun,
+            namaAkun,
+            kategori,
+            anggaran: row.anggaran,
+            realisasi: row.realisasi,
+            opdId: finalOpdId,
+          },
+        })
+        created++
+        jenisImported[rowJenis].created++
+        historyEntries.push({
           recordId: record.id,
           realisasiLama: 0,
-          realisasiBaru: record.realisasi,
+          realisasiBaru: row.realisasi,
           isUpdate: false,
-        }))
-      )
-    } else {
-      // Upsert mode: check each row and either update or create
-      for (const row of rows) {
-        const kodeAkun = row.kodeAkun.trim()
-        const namaAkun = row.namaAkun.trim()
-        const kategori = row.kategori.trim()
-
-        // Find existing record with same kodeAkun, kategori, tahunAnggaranId, and opdId
+          jenis: rowJenis,
+        })
+      } else {
+        // Upsert mode
         const existingWhere: Record<string, unknown> = {
           kodeAkun,
           kategori,
@@ -196,14 +210,11 @@ export async function POST(request: Request) {
           existingWhere.opdId = null
         }
 
-        const existing = await getDbModel(jenis).findFirst({
-          where: existingWhere,
-        })
+        const existing = await dbModel.findFirst({ where: existingWhere })
 
         if (existing) {
-          // Update existing record - overwrite with new data
           const realisasiLama = existing.realisasi
-          await getDbModel(jenis).update({
+          await dbModel.update({
             where: { id: existing.id },
             data: {
               namaAkun,
@@ -213,15 +224,16 @@ export async function POST(request: Request) {
             },
           })
           updated++
+          jenisImported[rowJenis].updated++
           historyEntries.push({
             recordId: existing.id,
             realisasiLama,
             realisasiBaru: row.realisasi,
             isUpdate: true,
+            jenis: rowJenis,
           })
         } else {
-          // Create new record
-          const record = await getDbModel(jenis).create({
+          const record = await dbModel.create({
             data: {
               tahunAnggaranId,
               kodeAkun,
@@ -233,30 +245,34 @@ export async function POST(request: Request) {
             },
           })
           created++
+          jenisImported[rowJenis].created++
           historyEntries.push({
             recordId: record.id,
             realisasiLama: 0,
             realisasiBaru: row.realisasi,
             isUpdate: false,
+            jenis: rowJenis,
           })
         }
       }
     }
 
-    // Create history records
-    const historyData = historyEntries.map(entry => ({
-      [`${jenis}Id`]: entry.recordId,
-      realisasiLama: entry.realisasiLama,
-      realisasiBaru: entry.realisasiBaru,
-      tanggalUpdate: new Date(),
-      keterangan: entry.isUpdate
-        ? `Update data ${jenis} via import (ditimpa)`
-        : `Import data ${jenis} (baru)`,
-      updatedBy: userName,
-    }))
-
-    if (historyData.length > 0) {
-      await getHistoryModel(jenis).createMany({ data: historyData as any })
+    // Create history records per jenis
+    for (const j of Object.keys(jenisImported)) {
+      const jHistoryEntries = historyEntries.filter(e => e.jenis === j)
+      const historyData = jHistoryEntries.map(entry => ({
+        [`${j}Id`]: entry.recordId,
+        realisasiLama: entry.realisasiLama,
+        realisasiBaru: entry.realisasiBaru,
+        tanggalUpdate: new Date(),
+        keterangan: entry.isUpdate
+          ? `Update data ${j} via import (ditimpa)`
+          : `Import data ${j} (baru)`,
+        updatedBy: userName,
+      }))
+      if (historyData.length > 0) {
+        await getHistoryModel(j as JenisData).createMany({ data: historyData as any })
+      }
     }
 
     // Sync realisasi
@@ -264,10 +280,17 @@ export async function POST(request: Request) {
     await syncRealisasiSkpd(tahunAnggaranId)
     invalidateDashboardCache()
 
+    // Build detail message with per-jenis breakdown
+    const jenisNameMap: Record<string, string> = { pendapatan: 'Pendapatan', belanja: 'Belanja', pembiayaan: 'Pembiayaan' }
+    const breakdown = Object.entries(jenisImported)
+      .map(([j, stats]) => `${jenisNameMap[j] || j}: ${stats.created} baru, ${stats.updated} update`)
+      .join('; ')
     const modeLabel = mode === 'replace' ? 'ganti semua' : 'timpa data sama'
-    const detailMsg = mode === 'replace'
-      ? `Berhasil mengimpor ${created} data ${jenis} (mode ganti semua)`
-      : `Berhasil mengimpor ${created} data baru & mengupdate ${updated} data ${jenis} (mode timpa data sama)`
+    const detailMsg = isAutoDetect
+      ? `Berhasil mengimpor (${modeLabel}): ${breakdown}`
+      : mode === 'replace'
+        ? `Berhasil mengimpor ${created} data ${jenis} (mode ganti semua)`
+        : `Berhasil mengimpor ${created} data baru & mengupdate ${updated} data ${jenis} (mode timpa data sama)`
 
     return NextResponse.json({
       success: true,
@@ -275,6 +298,7 @@ export async function POST(request: Request) {
       created,
       updated,
       mode,
+      jenisImported,
       message: detailMsg,
     })
   } catch (error) {

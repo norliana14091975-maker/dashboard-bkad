@@ -239,3 +239,58 @@ Stage Summary:
 - Typography: tracking-tight, font-semibold, larger sizes for emphasis
 - Mobile: frosted glass overlays, compact stats, clean bottom nav
 - Zero breaking changes — all functionality preserved
+
+---
+Task ID: 6
+Agent: Main
+Task: Fix import PDF to only read 17-digit accounts (skip < 17)
+
+Work Log:
+- Changed filter in import-pdf route from `kodeAkun.length < 13 || kodeAkun.length > 25` to `kodeAkun.length < 17`
+- Updated error message to be more specific about 17-digit requirement
+- Verified with existing DB data: pendapatan codes are 17 chars, belanja codes are 19 chars, group codes are 3-5 chars
+- All codes >= 17 chars are kept (pendapatan=17, belanja=19), group/header codes < 17 are skipped
+
+Stage Summary:
+- Import PDF now skips group/header codes (< 17 chars) and only reads full account codes (>= 17 chars)
+
+---
+Task ID: 7
+Agent: Main
+Task: Auto-detect category (pendapatan/belanja/pembiayaan) from kode akun during import
+
+Work Log:
+- Created shared utility `/src/lib/akun-detector.ts` with:
+  - `detectJenisFromKodeAkun()`: 4→pendapatan, 5→belanja, 6→pembiayaan
+  - `detectKategoriFromKodeAkun()`: detects sub-kategori from 2nd segment (4.1→PAD, 5.1→Operasi, 5.2→Modal, 6.1→Penerimaan, etc.)
+  - Exported types, labels, colors, and badge CSS classes
+- Updated PDF import API (`/api/admin/import-pdf/route.ts`):
+  - Added `detectedJenis` and `detectedKategori` to ExtractedAkun interface
+  - Accepts `jenis='auto'` for auto-detection mode
+  - Returns `jenisSummary` in parse response (e.g., {pendapatan: 15, belanja: 30})
+  - Supports multi-jenis import: each row can have its own `jenis` field, routed to the correct DB model
+  - Import result includes per-jenis breakdown (e.g., "Pendapatan: 10 baru, 5 update; Belanja: 20 baru, 3 update")
+- Updated Excel import API (`/api/admin/import/route.ts`):
+  - Same multi-jenis import support
+  - Each row routed to correct DB model based on per-row jenis
+  - Per-jenis breakdown in result message
+- Updated PdfImportDialog UI:
+  - `jenis` prop is now optional (supports "auto" mode)
+  - Shows auto-detect summary badges (Pendapatan: 15, Belanja: 30, etc.)
+  - Added "Jenis" column in preview table with colored badges
+  - Auto-sets kategori from detectedKategori when in auto mode
+  - Per-row jenis passed to API for correct DB model routing
+- Updated ImportDialog (Excel) UI:
+  - Same auto-detect support with `enrichRowsWithAutoDetect()` function
+  - Added "Jenis" column with colored badges in preview table
+  - Per-row jenis included in import request
+- All existing Manager components (PendapatanManager, BelanjaManager, PembiayaanManager) still work with specific jenis
+- Build passes, lint passes, no errors
+
+Stage Summary:
+- Auto-detect feature complete for both PDF and Excel imports
+- Kode akun prefix (4/5/6) automatically determines category
+- Sub-kategori detected from 2nd segment (4.1→PAD, 5.1→Operasi, 5.2→Modal, etc.)
+- Multi-jenis import: single file can contain pendapatan, belanja, and pembiayaan data
+- UI shows colored badges for detected categories
+- Backward compatible: existing per-page import still works

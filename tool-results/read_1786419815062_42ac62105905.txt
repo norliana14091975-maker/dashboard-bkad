@@ -1,0 +1,1115 @@
+     1→"use client";
+     2→
+     3→import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+     4→import { Button } from "@/components/ui/button";
+     5→import {
+     6→  Dialog,
+     7→  DialogContent,
+     8→  DialogDescription,
+     9→  DialogFooter,
+    10→  DialogHeader,
+    11→  DialogTitle,
+    12→} from "@/components/ui/dialog";
+    13→import { Label } from "@/components/ui/label";
+    14→import { Badge } from "@/components/ui/badge";
+    15→import { Input } from "@/components/ui/input";
+    16→import {
+    17→  Select,
+    18→  SelectContent,
+    19→  SelectItem,
+    20→  SelectTrigger,
+    21→  SelectValue,
+    22→} from "@/components/ui/select";
+    23→import { Switch } from "@/components/ui/switch";
+    24→import {
+    25→  Table,
+    26→  TableBody,
+    27→  TableCell,
+    28→  TableHead,
+    29→  TableHeader,
+    30→  TableRow,
+    31→} from "@/components/ui/table";
+    32→import { ScrollArea } from "@/components/ui/scroll-area";
+    33→import { Checkbox } from "@/components/ui/checkbox";
+    34→import { useToast } from "@/hooks/use-toast";
+    35→import { useAuth } from "@/hooks/use-auth";
+    36→import {
+    37→  Upload,
+    38→  FileText,
+    39→  AlertCircle,
+    40→  CheckCircle2,
+    41→  Loader2,
+    42→  X,
+    43→  Building2,
+    44→  Search,
+    45→  ChevronDown,
+    46→  ChevronUp,
+    47→  Trash2,
+    48→  ShieldCheck,
+    49→  ShieldX,
+    50→  Filter,
+    51→  CheckSquare,
+    52→  Square,
+    53→} from "lucide-react";
+    54→import { motion, AnimatePresence } from "framer-motion";
+    55→
+    56→type JenisData = "pendapatan" | "belanja" | "pembiayaan";
+    57→
+    58→type ExtractedAkun = {
+    59→  kodeAkun: string;
+    60→  namaAkun: string;
+    61→  anggaran: number;
+    62→  realisasi: number;
+    63→  line: number;
+    64→  rawLine: string;
+    65→};
+    66→
+    67→type ImportRow = {
+    68→  kodeAkun: string;
+    69→  namaAkun: string;
+    70→  kategori: string;
+    71→  anggaran: number;
+    72→  realisasi: number;
+    73→};
+    74→
+    75→type OpdOption = {
+    76→  id: string;
+    77→  kodeOpd: string;
+    78→  namaOpd: string;
+    79→};
+    80→
+    81→type PdfImportDialogProps = {
+    82→  open: boolean;
+    83→  onOpenChange: (open: boolean) => void;
+    84→  jenis: JenisData;
+    85→  tahunAnggaranId: string | null;
+    86→  onSuccess: () => void;
+    87→};
+    88→
+    89→const jenisLabels: Record<JenisData, string> = {
+    90→  pendapatan: "Pendapatan",
+    91→  belanja: "Belanja",
+    92→  pembiayaan: "Pembiayaan",
+    93→};
+    94→
+    95→const jenisColors: Record<JenisData, string> = {
+    96→  pendapatan: "bg-emerald-500",
+    97→  belanja: "bg-red-500",
+    98→  pembiayaan: "bg-amber-500",
+    99→};
+   100→
+   101→const jenisGradients: Record<JenisData, string> = {
+   102→  pendapatan: "from-emerald-500 to-green-600",
+   103→  belanja: "from-red-500 to-rose-600",
+   104→  pembiayaan: "from-amber-500 to-orange-500",
+   105→};
+   106→
+   107→// Default kategori per jenis
+   108→const defaultKategori: Record<JenisData, string> = {
+   109→  pendapatan: "PAD",
+   110→  belanja: "Operasi",
+   111→  pembiayaan: "Penerimaan",
+   112→};
+   113→
+   114→// Common kode akun prefixes with labels (standard Indonesian government account codes)
+   115→const KODE_AKUN_PREFIXES: Record<string, string> = {
+   116→  "4": "Pendapatan",
+   117→  "4.1": "Pendapatan - PAD",
+   118→  "4.2": "Pendapatan - Transfer",
+   119→  "4.3": "Pendapatan - Lain-Lain",
+   120→  "5": "Belanja",
+   121→  "5.1": "Belanja Operasi",
+   122→  "5.1.01": "Belanja Operasi - Pegawai",
+   123→  "5.1.02": "Belanja Operasi - Barang/Jasa",
+   124→  "5.1.03": "Belanja Operasi - Modal",
+   125→  "5.1.04": "Belanja Operasi - Bunga",
+   126→  "5.1.05": "Belanja Operasi - Subsidi",
+   127→  "5.1.06": "Belanja Operasi - Bantuan Sosial",
+   128→  "5.1.07": "Belanja Operasi - Bantuan Keuangan",
+   129→  "5.1.08": "Belanja Operasi - Tidak Terduga",
+   130→  "5.2": "Belanja Modal",
+   131→  "5.2.01": "Belanja Modal - Tanah",
+   132→  "5.2.02": "Belanja Modal - Peralatan & Mesin",
+   133→  "5.2.03": "Belanja Modal - Gedung & Bangunan",
+   134→  "5.2.04": "Belanja Modal - Jalan, Irigasi & Jaringan",
+   135→  "5.2.05": "Belanja Modal - Aset Tetap Lainnya",
+   136→  "5.2.06": "Belanja Modal - Konstruksi Dalam Pengerjaan",
+   137→  "5.3": "Belanja Tidak Terduga",
+   138→  "5.4": "Belanja Transfer",
+   139→  "6": "Pembiayaan",
+   140→  "6.1": "Pembiayaan - Penerimaan",
+   141→  "6.2": "Pembiayaan - Pengeluaran",
+   142→  "7": "Surplus/Defisit",
+   143→};
+   144→
+   145→// Extract prefixes from a list of kode akun
+   146→function extractPrefixesFromKodeAkun(kodeAkunList: string[]): Array<{ prefix: string; label: string; count: number }> {
+   147→  const prefixCount = new Map<string, number>();
+   148→
+   149→  for (const kode of kodeAkunList) {
+   150→    const segments = kode.split(".");
+   151→    if (segments.length < 2) continue;
+   152→
+   153→    // Level 1: "4", "5", "6"
+   154→    const l1 = segments[0];
+   155→    prefixCount.set(l1, (prefixCount.get(l1) || 0) + 1);
+   156→
+   157→    // Level 2: "4.1", "5.1", "5.2"
+   158→    if (segments.length >= 2) {
+   159→      const l2 = `${segments[0]}.${segments[1]}`;
+   160→      prefixCount.set(l2, (prefixCount.get(l2) || 0) + 1);
+   161→    }
+   162→
+   163→    // Level 3: "5.1.01", "5.2.02"
+   164→    if (segments.length >= 3) {
+   165→      const l3 = `${segments[0]}.${segments[1]}.${segments[2]}`;
+   166→      prefixCount.set(l3, (prefixCount.get(l3) || 0) + 1);
+   167→    }
+   168→  }
+   169→
+   170→  return Array.from(prefixCount.entries())
+   171→    .map(([prefix, count]) => ({
+   172→      prefix,
+   173→      label: KODE_AKUN_PREFIXES[prefix] || `Kode ${prefix}`,
+   174→      count,
+   175→    }))
+   176→    .sort((a, b) => a.prefix.localeCompare(b.prefix));
+   177→}
+   178→
+   179→export default function PdfImportDialog({
+   180→  open,
+   181→  onOpenChange,
+   182→  jenis,
+   183→  tahunAnggaranId,
+   184→  onSuccess,
+   185→}: PdfImportDialogProps) {
+   186→  const { toast } = useToast();
+   187→  const { user } = useAuth();
+   188→  const fileInputRef = useRef<HTMLInputElement>(null);
+   189→
+   190→  const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
+   191→  const [mode, setMode] = useState<"upsert" | "replace">("upsert");
+   192→  const [extractedData, setExtractedData] = useState<ExtractedAkun[]>([]);
+   193→  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+   194→  const [parsing, setParsing] = useState(false);
+   195→  const [importing, setImporting] = useState(false);
+   196→  const [dragOver, setDragOver] = useState(false);
+   197→  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+   198→  const [pdfFile, setPdfFile] = useState<File | null>(null);
+   199→
+   200→  // OPD selection
+   201→  const [opdList, setOpdList] = useState<OpdOption[]>([]);
+   202→  const [selectedOpdId, setSelectedOpdId] = useState<string>("");
+   203→  const [opdLoading, setOpdLoading] = useState(false);
+   204→  const [opdSearch, setOpdSearch] = useState("");
+   205→
+   206→  // Kategori per row (for batch set)
+   207→  const [globalKategori, setGlobalKategori] = useState<string>(defaultKategori[jenis]);
+   208→  const [kategoriList, setKategoriList] = useState<string[]>([]);
+   209→
+   210→  // Kode akun prefix filter
+   211→  const [availablePrefixes, setAvailablePrefixes] = useState<Array<{ prefix: string; label: string; count: number }>>([]);
+   212→  const [selectedPrefixes, setSelectedPrefixes] = useState<Set<string>>(new Set());
+   213→  const [prefixFilterEnabled, setPrefixFilterEnabled] = useState(false);
+   214→
+   215→  // Result
+   216→  const [result, setResult] = useState<{
+   217→    success: boolean;
+   218→    imported: number;
+   219→    created: number;
+   220→    updated: number;
+   221→    message: string;
+   222→  } | null>(null);
+   223→
+   224→  // Selected rows for import (checkbox)
+   225→  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+   226→  const [allSelected, setAllSelected] = useState(true);
+   227→
+   228→  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+   229→  const isOpdUser = user?.role === "opd";
+   230→
+   231→  // Fetch OPD list when dialog opens (admin/superadmin only)
+   232→  useEffect(() => {
+   233→    if (open && isAdmin && tahunAnggaranId) {
+   234→      fetchOpdList();
+   235→    }
+   236→  }, [open, isAdmin, tahunAnggaranId]);
+   237→
+   238→  // Fetch kategori list for the selected jenis
+   239→  useEffect(() => {
+   240→    if (open) {
+   241→      fetchKategoriList();
+   242→      setGlobalKategori(defaultKategori[jenis]);
+   243→    }
+   244→  }, [open, jenis]);
+   245→
+   246→  const fetchOpdList = async () => {
+   247→    setOpdLoading(true);
+   248→    try {
+   249→      const url = tahunAnggaranId
+   250→        ? `/api/admin/opd-list?tahunAnggaranId=${tahunAnggaranId}`
+   251→        : "/api/admin/opd-list";
+   252→      const res = await fetch(url);
+   253→      const data = await res.json();
+   254→      if (data.data) {
+   255→        setOpdList(data.data);
+   256→      }
+   257→    } catch (err) {
+   258→      console.error("Failed to fetch OPD list:", err);
+   259→    } finally {
+   260→      setOpdLoading(false);
+   261→    }
+   262→  };
+   263→
+   264→  const fetchKategoriList = async () => {
+   265→    try {
+   266→      const jenisMap: Record<JenisData, string> = {
+   267→        pendapatan: "Pendapatan",
+   268→        belanja: "Belanja",
+   269→        pembiayaan: "Pembiayaan",
+   270→      };
+   271→      const res = await fetch(`/api/admin/kategori?jenis=${jenisMap[jenis]}&pageSize=100`);
+   272→      const data = await res.json();
+   273→      if (data.data) {
+   274→        setKategoriList(data.data.map((k: { namaKategori: string }) => k.namaKategori));
+   275→      }
+   276→    } catch (err) {
+   277→      console.error("Failed to fetch kategori:", err);
+   278→    }
+   279→  };
+   280→
+   281→  const reset = useCallback(() => {
+   282→    setStep("upload");
+   283→    setExtractedData([]);
+   284→    setImportRows([]);
+   285→    setParsing(false);
+   286→    setImporting(false);
+   287→    setResult(null);
+   288→    setPdfFile(null);
+   289→    setUploadedFileName("");
+   290→    setSelectedOpdId("");
+   291→    setSelectedRows(new Set());
+   292→    setAllSelected(true);
+   293→    setGlobalKategori(defaultKategori[jenis]);
+   294→    setAvailablePrefixes([]);
+   295→    setSelectedPrefixes(new Set());
+   296→    setPrefixFilterEnabled(false);
+   297→  }, [jenis]);
+   298→
+   299→  useEffect(() => {
+   300→    if (!open) reset();
+   301→  }, [open, reset]);
+   302→
+   303→  // Computed: filtered import rows based on selected prefixes
+   304→  const filteredImportRows = useMemo(() => {
+   305→    if (!prefixFilterEnabled || selectedPrefixes.size === 0) {
+   306→      return importRows;
+   307→    }
+   308→    return importRows.filter(row => {
+   309→      return Array.from(selectedPrefixes).some(prefix => row.kodeAkun.startsWith(prefix));
+   310→    });
+   311→  }, [importRows, prefixFilterEnabled, selectedPrefixes]);
+   312→
+   313→  // Computed: filtered indices (mapping from filteredImportRows index to importRows index)
+   314→  const filteredToOriginalIndex = useMemo(() => {
+   315→    if (!prefixFilterEnabled || selectedPrefixes.size === 0) {
+   316→      return importRows.map((_, i) => i);
+   317→    }
+   318→    const indices: number[] = [];
+   319→    importRows.forEach((row, i) => {
+   320→      if (Array.from(selectedPrefixes).some(prefix => row.kodeAkun.startsWith(prefix))) {
+   321→        indices.push(i);
+   322→      }
+   323→    });
+   324→    return indices;
+   325→  }, [importRows, prefixFilterEnabled, selectedPrefixes]);
+   326→
+   327→  // Toggle a prefix filter
+   328→  const togglePrefix = (prefix: string) => {
+   329→    setSelectedPrefixes(prev => {
+   330→      const next = new Set(prev);
+   331→      if (next.has(prefix)) {
+   332→        next.delete(prefix);
+   333→      } else {
+   334→        next.add(prefix);
+   335→      }
+   336→      return next;
+   337→    });
+   338→  };
+   339→
+   340→  // Select all prefixes
+   341→  const selectAllPrefixes = () => {
+   342→    setSelectedPrefixes(new Set(availablePrefixes.map(p => p.prefix)));
+   343→  };
+   344→
+   345→  // Clear all prefixes
+   346→  const clearAllPrefixes = () => {
+   347→    setSelectedPrefixes(new Set());
+   348→  };
+   349→
+   350→  // Apply global kategori to all rows
+   351→  const applyGlobalKategori = () => {
+   352→    setImportRows(prev => prev.map(row => ({ ...row, kategori: globalKategori })));
+   353→  };
+   354→
+   355→  // Toggle row selection
+   356→  const toggleRow = (index: number) => {
+   357→    setSelectedRows(prev => {
+   358→      const next = new Set(prev);
+   359→      if (next.has(index)) {
+   360→        next.delete(index);
+   361→      } else {
+   362→        next.add(index);
+   363→      }
+   364→      return next;
+   365→    });
+   366→  };
+   367→
+   368→  const toggleAll = () => {
+   369→    if (allSelected) {
+   370→      setSelectedRows(new Set());
+   371→      setAllSelected(false);
+   372→    } else {
+   373→      setSelectedRows(new Set(importRows.map((_, i) => i)));
+   374→      setAllSelected(true);
+   375→    }
+   376→  };
+   377→
+   378→  // Handle PDF file upload
+   379→  const handleFileUpload = async (file: File) => {
+   380→    if (!file.name.toLowerCase().endsWith(".pdf")) {
+   381→      toast({
+   382→        title: "Format tidak didukung",
+   383→        description: "Hanya file PDF yang dapat diimpor",
+   384→        variant: "destructive",
+   385→      });
+   386→      return;
+   387→    }
+   388→
+   389→    if (!tahunAnggaranId) {
+   390→      toast({
+   391→        title: "Tahun Anggaran Belum Dipilih",
+   392→        description: "Pilih tahun anggaran terlebih dahulu",
+   393→        variant: "destructive",
+   394→      });
+   395→      return;
+   396→    }
+   397→
+   398→    setPdfFile(file);
+   399→    setUploadedFileName(file.name);
+   400→    setParsing(true);
+   401→
+   402→    try {
+   403→      const formData = new FormData();
+   404→      formData.append("file", file);
+   405→      formData.append("jenis", jenis);
+   406→      formData.append("tahunAnggaranId", tahunAnggaranId);
+   407→      formData.append("action", "parse");
+   408→      if (selectedOpdId && selectedOpdId !== "__none__") {
+   409→        formData.append("opdId", selectedOpdId);
+   410→      }
+   411→
+   412→      const res = await fetch("/api/admin/import-pdf", {
+   413→        method: "POST",
+   414→        body: formData,
+   415→      });
+   416→
+   417→      const data = await res.json();
+   418→
+   419→      if (!res.ok) {
+   420→        toast({
+   421→          title: "Gagal memproses PDF",
+   422→          description: data.error || "Terjadi kesalahan saat memproses file PDF",
+   423→          variant: "destructive",
+   424→        });
+   425→        setParsing(false);
+   426→        return;
+   427→      }
+   428→
+   429→      setExtractedData(data.extracted);
+   430→      // Convert to import rows with default kategori
+   431→      const rows: ImportRow[] = data.extracted.map((item: ExtractedAkun) => ({
+   432→        kodeAkun: item.kodeAkun,
+   433→        namaAkun: item.namaAkun,
+   434→        kategori: globalKategori,
+   435→        anggaran: item.anggaran || 0,
+   436→        realisasi: item.realisasi || 0,
+   437→      }));
+   438→      setImportRows(rows);
+   439→      setSelectedRows(new Set(rows.map((_, i) => i)));
+   440→      setAllSelected(true);
+   441→
+   442→      // Extract available prefixes from the kode akun list
+   443→      const prefixes = extractPrefixesFromKodeAkun(rows.map(r => r.kodeAkun));
+   444→      setAvailablePrefixes(prefixes);
+   445→      // Auto-select all prefixes initially
+   446→      setSelectedPrefixes(new Set(prefixes.map(p => p.prefix)));
+   447→      setPrefixFilterEnabled(prefixes.length > 1); // Enable filter if multiple prefixes found
+   448→
+   449→      setStep("preview");
+   450→    } catch (err) {
+   451→      toast({
+   452→        title: "Error",
+   453→        description: "Gagal membaca file PDF. Pastikan file tidak rusak.",
+   454→        variant: "destructive",
+   455→      });
+   456→    } finally {
+   457→      setParsing(false);
+   458→    }
+   459→  };
+   460→
+   461→  // Handle file input change
+   462→  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+   463→    const file = e.target.files?.[0];
+   464→    if (file) handleFileUpload(file);
+   465→  };
+   466→
+   467→  // Handle drag and drop
+   468→  const onDragOver = (e: React.DragEvent) => {
+   469→    e.preventDefault();
+   470→    setDragOver(true);
+   471→  };
+   472→
+   473→  const onDragLeave = () => setDragOver(false);
+   474→
+   475→  const onDrop = (e: React.DragEvent) => {
+   476→    e.preventDefault();
+   477→    setDragOver(false);
+   478→    const file = e.dataTransfer.files?.[0];
+   479→    if (file) handleFileUpload(file);
+   480→  };
+   481→
+   482→  // Perform the actual import
+   483→  const doImport = async () => {
+   484→    if (!pdfFile || !tahunAnggaranId) return;
+   485→
+   486→    const selectedImportRows = importRows.filter((_, i) => selectedRows.has(i));
+   487→    if (selectedImportRows.length === 0) {
+   488→      toast({
+   489→        title: "Tidak ada data dipilih",
+   490→        description: "Pilih minimal satu baris data untuk diimpor",
+   491→        variant: "destructive",
+   492→      });
+   493→      return;
+   494→    }
+   495→
+   496→    setImporting(true);
+   497→
+   498→    try {
+   499→      const formData = new FormData();
+   500→      formData.append("file", pdfFile);
+   501→      formData.append("jenis", jenis);
+   502→      formData.append("tahunAnggaranId", tahunAnggaranId);
+   503→      formData.append("action", "import");
+   504→      formData.append("mode", mode);
+   505→      formData.append("rows", JSON.stringify(selectedImportRows));
+   506→      if (selectedOpdId && selectedOpdId !== "__none__") {
+   507→        formData.append("opdId", selectedOpdId);
+   508→      }
+   509→
+   510→      const res = await fetch("/api/admin/import-pdf", {
+   511→        method: "POST",
+   512→        body: formData,
+   513→      });
+   514→
+   515→      const data = await res.json();
+   516→
+   517→      if (!res.ok) {
+   518→        toast({
+   519→          title: "Import Gagal",
+   520→          description: data.error || "Terjadi kesalahan saat mengimpor data",
+   521→          variant: "destructive",
+   522→        });
+   523→        setImporting(false);
+   524→        return;
+   525→      }
+   526→
+   527→      setResult({
+   528→        success: data.success,
+   529→        imported: data.imported,
+   530→        created: data.created,
+   531→        updated: data.updated,
+   532→        message: data.message,
+   533→      });
+   534→      setStep("result");
+   535→      onSuccess();
+   536→    } catch (err) {
+   537→      toast({
+   538→        title: "Error",
+   539→        description: "Gagal mengimpor data dari PDF",
+   540→        variant: "destructive",
+   541→      });
+   542→    } finally {
+   543→      setImporting(false);
+   544→    }
+   545→  };
+   546→
+   547→  // Update a single row's kategori
+   548→  const updateRowKategori = (index: number, kategori: string) => {
+   549→    setImportRows(prev => {
+   550→      const next = [...prev];
+   551→      next[index] = { ...next[index], kategori };
+   552→      return next;
+   553→    });
+   554→  };
+   555→
+   556→  // Update a single row's namaAkun
+   557→  const updateRowNamaAkun = (index: number, namaAkun: string) => {
+   558→    setImportRows(prev => {
+   559→      const next = [...prev];
+   560→      next[index] = { ...next[index], namaAkun };
+   561→      return next;
+   562→    });
+   563→  };
+   564→
+   565→  // Format number as Rupiah
+   566→  const formatRupiah = (val: number) => {
+   567→    if (!val || val === 0) return "-";
+   568→    return new Intl.NumberFormat("id-ID").format(val);
+   569→  };
+   570→
+   571→  // Filtered OPD list
+   572→  const filteredOpds = opdList.filter(opd =>
+   573→    opd.namaOpd.toLowerCase().includes(opdSearch.toLowerCase()) ||
+   574→    opd.kodeOpd.toLowerCase().includes(opdSearch.toLowerCase())
+   575→  );
+   576→
+   577→  return (
+   578→    <Dialog open={open} onOpenChange={onOpenChange}>
+   579→      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+   580→        <DialogHeader className="px-6 pt-6 pb-2">
+   581→          <DialogTitle className="flex items-center gap-2">
+   582→            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${jenisGradients[jenis]} flex items-center justify-center`}>
+   583→              <FileText className="w-4 h-4 text-white" />
+   584→            </div>
+   585→            Import PDF — {jenisLabels[jenis]}
+   586→          </DialogTitle>
+   587→          <DialogDescription>
+   588→            Upload file PDF untuk mengekstrak kode akun 17 digit (termasuk titik) dan mengimpor data {jenisLabels[jenis].toLowerCase()}
+   589→          </DialogDescription>
+   590→        </DialogHeader>
+   591→
+   592→        <div className="flex-1 overflow-y-auto px-6 pb-2">
+   593→          <AnimatePresence mode="wait">
+   594→            {/* Step 1: Upload */}
+   595→            {step === "upload" && (
+   596→              <motion.div
+   597→                key="upload"
+   598→                initial={{ opacity: 0, x: -20 }}
+   599→                animate={{ opacity: 1, x: 0 }}
+   600→                exit={{ opacity: 0, x: 20 }}
+   601→                className="space-y-4"
+   602→              >
+   603→                {/* OPD Selection for Admin/Superadmin */}
+   604→                {isAdmin && (
+   605→                  <div className="space-y-2">
+   606→                    <Label className="flex items-center gap-2 text-sm font-medium">
+   607→                      <Building2 className="w-4 h-4" />
+   608→                      OPD Tujuan Import
+   609→                    </Label>
+   610→                    <div className="flex items-center gap-2 mb-1">
+   611→                      <Badge variant="outline" className="text-xs">
+   612→                        <ShieldCheck className="w-3 h-3 mr-1" />
+   613→                        {user?.role === "superadmin" ? "Super Admin" : "Admin"} — dapat memilih OPD
+   614→                      </Badge>
+   615→                    </div>
+   616→                    {opdLoading ? (
+   617→                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+   618→                        <Loader2 className="w-4 h-4 animate-spin" />
+   619→                        Memuat daftar OPD...
+   620→                      </div>
+   621→                    ) : (
+   622→                      <div className="space-y-2">
+   623→                        <div className="relative">
+   624→                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   625→                          <Input
+   626→                            placeholder="Cari OPD..."
+   627→                            value={opdSearch}
+   628→                            onChange={e => setOpdSearch(e.target.value)}
+   629→                            className="pl-9"
+   630→                          />
+   631→                        </div>
+   632→                        <Select value={selectedOpdId} onValueChange={setSelectedOpdId}>
+   633→                          <SelectTrigger>
+   634→                            <SelectValue placeholder="-- Tanpa OPD (Data Global) --" />
+   635→                          </SelectTrigger>
+   636→                          <SelectContent>
+   637→                            <SelectItem value="__none__">-- Tanpa OPD (Data Global) --</SelectItem>
+   638→                            {filteredOpds.map(opd => (
+   639→                              <SelectItem key={opd.id} value={opd.id}>
+   640→                                {opd.kodeOpd} — {opd.namaOpd}
+   641→                              </SelectItem>
+   642→                            ))}
+   643→                          </SelectContent>
+   644→                        </Select>
+   645→                        {selectedOpdId && selectedOpdId !== "__none__" && (
+   646→                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+   647→                            <Building2 className="w-3 h-3" />
+   648→                            Data akan diimpor ke OPD: {opdList.find(o => o.id === selectedOpdId)?.namaOpd}
+   649→                          </div>
+   650→                        )}
+   651→                      </div>
+   652→                    )}
+   653→                  </div>
+   654→                )}
+   655→
+   656→                {/* OPD User Info */}
+   657→                {isOpdUser && (
+   658→                  <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+   659→                    <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+   660→                      <ShieldX className="w-4 h-4" />
+   661→                      OPD User — Data hanya dapat diimpor ke OPD Anda sendiri
+   662→                    </div>
+   663→                    <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+   664→                      Sebagai pengguna OPD, Anda hanya dapat mengimpor data ke OPD yang terkait dengan akun Anda.
+   665→                    </div>
+   666→                  </div>
+   667→                )}
+   668→
+   669→                {/* Import Mode */}
+   670→                <div className="space-y-2">
+   671→                  <Label className="text-sm font-medium">Mode Import</Label>
+   672→                  <div className="flex items-center gap-3">
+   673→                    <Switch
+   674→                      checked={mode === "replace"}
+   675→                      onCheckedChange={checked => setMode(checked ? "replace" : "upsert")}
+   676→                    />
+   677→                    <div className="text-sm">
+   678→                      {mode === "upsert" ? (
+   679→                        <span>Timpa Data Sama — data dengan kode akun sama akan ditimpa</span>
+   680→                      ) : (
+   681→                        <span className="text-red-600 dark:text-red-400 font-medium">
+   682→                          Ganti Semua — semua data {isAdmin ? "" : "OPD Anda "}akan dihapus lalu diganti
+   683→                        </span>
+   684→                      )}
+   685→                    </div>
+   686→                  </div>
+   687→                </div>
+   688→
+   689→                {/* Kategori Default */}
+   690→                <div className="space-y-2">
+   691→                  <Label className="text-sm font-medium">Kategori Default</Label>
+   692→                  <div className="flex items-center gap-2">
+   693→                    {kategoriList.length > 0 ? (
+   694→                      <Select value={globalKategori} onValueChange={setGlobalKategori}>
+   695→                        <SelectTrigger className="w-64">
+   696→                          <SelectValue />
+   697→                        </SelectTrigger>
+   698→                        <SelectContent>
+   699→                          {kategoriList.map(k => (
+   700→                            <SelectItem key={k} value={k}>{k}</SelectItem>
+   701→                          ))}
+   702→                        </SelectContent>
+   703→                      </Select>
+   704→                    ) : (
+   705→                      <Input
+   706→                        value={globalKategori}
+   707→                        onChange={e => setGlobalKategori(e.target.value)}
+   708→                        className="w-64"
+   709→                        placeholder="Kategori"
+   710→                      />
+   711→                    )}
+   712→                    <Badge variant="secondary" className="text-xs">Diterapkan ke semua baris</Badge>
+   713→                  </div>
+   714→                </div>
+   715→
+   716→                {/* PDF File Upload */}
+   717→                <div className="space-y-2">
+   718→                  <Label className="text-sm font-medium">File PDF</Label>
+   719→                  <div
+   720→                    className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer ${
+   721→                      dragOver
+   722→                        ? "border-primary bg-primary/5 scale-[1.02]"
+   723→                        : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"
+   724→                    }`}
+   725→                    onDragOver={onDragOver}
+   726→                    onDragLeave={onDragLeave}
+   727→                    onDrop={onDrop}
+   728→                    onClick={() => fileInputRef.current?.click()}
+   729→                  >
+   730→                    <input
+   731→                      ref={fileInputRef}
+   732→                      type="file"
+   733→                      accept=".pdf"
+   734→                      className="hidden"
+   735→                      onChange={onFileChange}
+   736→                    />
+   737→                    <div className="space-y-3">
+   738→                      <div className={`mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br ${jenisGradients[jenis]} flex items-center justify-center shadow-lg`}>
+   739→                        <FileText className="w-8 h-8 text-white" />
+   740→                      </div>
+   741→                      <div>
+   742→                        <p className="text-lg font-semibold">
+   743→                          {dragOver ? "Lepaskan file PDF di sini" : "Klik atau seret file PDF ke sini"}
+   744→                        </p>
+   745→                        <p className="text-sm text-muted-foreground mt-1">
+   746→                          File PDF yang berisi kode akun 17 digit (termasuk titik) akan diekstrak secara otomatis
+   747→                        </p>
+   748→                      </div>
+   749→                      <Badge variant="outline" className="text-xs">
+   750→                        Format: .pdf saja
+   751→                      </Badge>
+   752→                    </div>
+   753→                  </div>
+   754→                </div>
+   755→
+   756→                {/* Info about what gets extracted */}
+   757→                <div className="p-3 rounded-lg bg-muted/50 border">
+   758→                  <p className="text-sm font-medium mb-2">📋 Cara Kerja Import PDF</p>
+   759→                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+   760→                    <li>Upload file PDF (DPA, APBD, dokumen keuangan)</li>
+   761→                    <li>Sistem otomatis mengekstrak <strong>kode akun 17 digit</strong> (termasuk titik) dari teks PDF</li>
+   762→                    <li>Nama akun, anggaran, dan realisasi juga diekstrak jika tersedia</li>
+   763→                    <li>Anda dapat mengedit data sebelum mengimpor ke database</li>
+   764→                    <li>OPD User hanya dapat mengimpor ke OPD sendiri</li>
+   765→                    <li>Admin / Super Admin dapat memilih OPD tujuan</li>
+   766→                  </ul>
+   767→                </div>
+   768→
+   769→                {parsing && (
+   770→                  <div className="flex items-center justify-center gap-3 py-4">
+   771→                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+   772→                    <span className="text-sm font-medium">Membaca dan mengekstrak kode akun dari PDF...</span>
+   773→                  </div>
+   774→                )}
+   775→              </motion.div>
+   776→            )}
+   777→
+   778→            {/* Step 2: Preview */}
+   779→            {step === "preview" && (
+   780→              <motion.div
+   781→                key="preview"
+   782→                initial={{ opacity: 0, x: -20 }}
+   783→                animate={{ opacity: 1, x: 0 }}
+   784→                exit={{ opacity: 0, x: 20 }}
+   785→                className="space-y-4"
+   786→              >
+   787→                {/* Summary header */}
+   788→                <div className="flex items-center justify-between">
+   789→                  <div className="flex items-center gap-2">
+   790→                    <Badge className={`${jenisColors[jenis]} text-white`}>
+   791→                      {extractedData.length} kode akun ditemukan ({filteredImportRows.length} ditampilkan)
+   792→                    </Badge>
+   793→                    <span className="text-sm text-muted-foreground">
+   794→                      {uploadedFileName}
+   795→                    </span>
+   796→                  </div>
+   797→                  <div className="flex items-center gap-2">
+   798→                    <Button
+   799→                      variant="outline"
+   800→                      size="sm"
+   801→                      onClick={() => {
+   802→                        setStep("upload");
+   803→                        setExtractedData([]);
+   804→                        setImportRows([]);
+   805→                        setPdfFile(null);
+   806→                        setUploadedFileName("");
+   807→                      }}
+   808→                    >
+   809→                      Upload Ulang
+   810→                    </Button>
+   811→                  </div>
+   812→                </div>
+   813→
+   814→                {/* OPD Info */}
+   815→                {isAdmin && selectedOpdId && selectedOpdId !== "__none__" && (
+   816→                  <div className="flex items-center gap-2 text-sm">
+   817→                    <Building2 className="w-4 h-4 text-primary" />
+   818→                    <span>Import ke OPD: <strong>{opdList.find(o => o.id === selectedOpdId)?.namaOpd}</strong></span>
+   819→                  </div>
+   820→                )}
+   821→                {isOpdUser && (
+   822→                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+   823→                    <ShieldX className="w-4 h-4" />
+   824→                    <span>Import ke OPD Anda sendiri</span>
+   825→                  </div>
+   826→                )}
+   827→
+   828→                {/* Kode Akun Prefix Filter */}
+   829→                {availablePrefixes.length > 0 && (
+   830→                  <div className="rounded-lg border bg-muted/30 overflow-hidden">
+   831→                    <div className="px-3 py-2 bg-muted/50 flex items-center justify-between">
+   832→                      <div className="flex items-center gap-2">
+   833→                        <Filter className="w-4 h-4 text-primary" />
+   834→                        <span className="text-sm font-semibold">Filter Kode Akun</span>
+   835→                      </div>
+   836→                      <div className="flex items-center gap-2">
+   837→                        <Switch
+   838→                          checked={prefixFilterEnabled}
+   839→                          onCheckedChange={setPrefixFilterEnabled}
+   840→                        />
+   841→                        <span className="text-xs text-muted-foreground">
+   842→                          {prefixFilterEnabled ? "Aktif" : "Nonaktif"}
+   843→                        </span>
+   844→                      </div>
+   845→                    </div>
+   846→                    {prefixFilterEnabled && (
+   847→                      <div className="p-3 space-y-2">
+   848→                        <div className="flex items-center gap-2 mb-2">
+   849→                          <Button variant="outline" size="sm" className="text-xs h-7" onClick={selectAllPrefixes}>
+   850→                            Pilih Semua
+   851→                          </Button>
+   852→                          <Button variant="outline" size="sm" className="text-xs h-7" onClick={clearAllPrefixes}>
+   853→                            Kosongkan
+   854→                          </Button>
+   855→                          <span className="text-xs text-muted-foreground ml-auto">
+   856→                            {selectedPrefixes.size} dari {availablePrefixes.length} prefix dipilih
+   857→                            → <strong>{filteredImportRows.length}</strong> baris
+   858→                          </span>
+   859→                        </div>
+   860→                        <div className="flex flex-wrap gap-1.5">
+   861→                          {availablePrefixes.map(({ prefix, label, count }) => {
+   862→                            const isSelected = selectedPrefixes.has(prefix);
+   863→                            // Determine indent level based on dots
+   864→                            const level = prefix.split(".").length - 1;
+   865→                            return (
+   866→                              <button
+   867→                                key={prefix}
+   868→                                onClick={() => togglePrefix(prefix)}
+   869→                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-150 border ${
+   870→                                  isSelected
+   871→                                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+   872→                                    : "bg-background text-foreground border-muted-foreground/20 hover:border-primary/50 hover:bg-muted"
+   873→                                } ${level > 0 ? "ml-" + (level * 2) : ""}`}
+   874→                              >
+   875→                                <code className="font-mono">{prefix}</code>
+   876→                                <span className="opacity-70">—</span>
+   877→                                <span className="truncate max-w-[120px]">{label}</span>
+   878→                                <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-1">
+   879→                                  {count}
+   880→                                </Badge>
+   881→                              </button>
+   882→                            );
+   883→                          })}
+   884→                        </div>
+   885→                      </div>
+   886→                    )}
+   887→                  </div>
+   888→                )}
+   889→
+   890→                {/* Batch Kategori */}
+   891→                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border">
+   892→                  <Label className="text-sm font-medium whitespace-nowrap">Kategori Semua Baris:</Label>
+   893→                  {kategoriList.length > 0 ? (
+   894→                    <Select value={globalKategori} onValueChange={val => { setGlobalKategori(val); setImportRows(prev => prev.map(row => ({ ...row, kategori: val }))); }}>
+   895→                      <SelectTrigger className="w-48">
+   896→                        <SelectValue />
+   897→                      </SelectTrigger>
+   898→                      <SelectContent>
+   899→                        {kategoriList.map(k => (
+   900→                          <SelectItem key={k} value={k}>{k}</SelectItem>
+   901→                        ))}
+   902→                      </SelectContent>
+   903→                    </Select>
+   904→                  ) : (
+   905→                    <Input
+   906→                      value={globalKategori}
+   907→                      onChange={e => {
+   908→                        setGlobalKategori(e.target.value);
+   909→                        setImportRows(prev => prev.map(row => ({ ...row, kategori: e.target.value })));
+   910→                      }}
+   911→                      className="w-48"
+   912→                    />
+   913→                  )}
+   914→                  <span className="text-xs text-muted-foreground">
+   915→                    ({selectedRows.size} dari {filteredImportRows.length} baris tampil, {importRows.length} total)
+   916→                  </span>
+   917→                </div>
+   918→
+   919→                {/* Preview Table */}
+   920→                <div className="border rounded-lg overflow-hidden">
+   921→                  <ScrollArea className="h-[350px]">
+   922→                    <Table>
+   923→                      <TableHeader className="sticky top-0 bg-background z-10">
+   924→                        <TableRow>
+   925→                          <TableHead className="w-10">
+   926→                            <input
+   927→                              type="checkbox"
+   928→                              checked={allSelected}
+   929→                              onChange={toggleAll}
+   930→                              className="rounded"
+   931→                            />
+   932→                          </TableHead>
+   933→                          <TableHead className="w-10">#</TableHead>
+   934→                          <TableHead className="min-w-[140px]">Kode Akun</TableHead>
+   935→                          <TableHead className="min-w-[200px]">Nama Akun</TableHead>
+   936→                          <TableHead className="w-32">Kategori</TableHead>
+   937→                          <TableHead className="w-32 text-right">Anggaran</TableHead>
+   938→                          <TableHead className="w-32 text-right">Realisasi</TableHead>
+   939→                          <TableHead className="w-20 text-center">Panjang</TableHead>
+   940→                        </TableRow>
+   941→                      </TableHeader>
+   942→                      <TableBody>
+   943→                        {filteredImportRows.map((row, filteredIdx) => {
+   944→                          const originalIdx = filteredToOriginalIndex[filteredIdx];
+   945→                          const is17Digit = row.kodeAkun.length === 17;
+   946→                          return (
+   947→                            <TableRow
+   948→                              key={filteredIdx}
+   949→                              className={`${!selectedRows.has(originalIdx) ? "opacity-40" : ""} ${is17Digit ? "bg-emerald-50/50 dark:bg-emerald-950/20" : ""}`}
+   950→                            >
+   951→                              <TableCell>
+   952→                                <input
+   953→                                  type="checkbox"
+   954→                                  checked={selectedRows.has(originalIdx)}
+   955→                                  onChange={() => toggleRow(originalIdx)}
+   956→                                  className="rounded"
+   957→                                />
+   958→                              </TableCell>
+   959→                              <TableCell className="text-xs text-muted-foreground">{filteredIdx + 1}</TableCell>
+   960→                              <TableCell>
+   961→                                <div className="flex items-center gap-1.5">
+   962→                                  <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
+   963→                                    {row.kodeAkun}
+   964→                                  </code>
+   965→                                  {is17Digit && (
+   966→                                    <Badge variant="default" className="text-[10px] px-1 py-0 bg-emerald-600">
+   967→                                      17
+   968→                                    </Badge>
+   969→                                  )}
+   970→                                </div>
+   971→                              </TableCell>
+   972→                              <TableCell>
+   973→                                <Input
+   974→                                  value={row.namaAkun}
+   975→                                  onChange={e => updateRowNamaAkun(originalIdx, e.target.value)}
+   976→                                  className="h-7 text-xs"
+   977→                                />
+   978→                              </TableCell>
+   979→                              <TableCell>
+   980→                                {kategoriList.length > 0 ? (
+   981→                                  <Select
+   982→                                    value={row.kategori}
+   983→                                    onValueChange={val => updateRowKategori(originalIdx, val)}
+   984→                                  >
+   985→                                    <SelectTrigger className="h-7 text-xs">
+   986→                                      <SelectValue />
+   987→                                    </SelectTrigger>
+   988→                                    <SelectContent>
+   989→                                      {kategoriList.map(k => (
+   990→                                        <SelectItem key={k} value={k} className="text-xs">{k}</SelectItem>
+   991→                                      ))}
+   992→                                    </SelectContent>
+   993→                                  </Select>
+   994→                                ) : (
+   995→                                  <Input
+   996→                                    value={row.kategori}
+   997→                                    onChange={e => updateRowKategori(originalIdx, e.target.value)}
+   998→                                    className="h-7 text-xs"
+   999→                                  />
+  1000→                                )}
+  1001→                              </TableCell>
+  1002→                              <TableCell className="text-right text-xs font-mono">
+  1003→                                {formatRupiah(row.anggaran)}
+  1004→                              </TableCell>
+  1005→                              <TableCell className="text-right text-xs font-mono">
+  1006→                                {formatRupiah(row.realisasi)}
+  1007→                              </TableCell>
+  1008→                              <TableCell className="text-center">
+  1009→                                <Badge
+  1010→                                  variant={is17Digit ? "default" : "secondary"}
+  1011→                                  className={`text-[10px] ${is17Digit ? "bg-emerald-600" : ""}`}
+  1012→                                >
+  1013→                                  {row.kodeAkun.length}
+  1014→                                </Badge>
+  1015→                              </TableCell>
+  1016→                            </TableRow>
+  1017→                          );
+  1018→                        })}
+  1019→                      </TableBody>
+  1020→                    </Table>
+  1021→                  </ScrollArea>
+  1022→                </div>
+  1023→
+  1024→                {/* Legend */}
+  1025→                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+  1026→                  <div className="flex items-center gap-1">
+  1027→                    <Badge variant="default" className="text-[10px] px-1 py-0 bg-emerald-600">17</Badge>
+  1028→                    <span>Persis 17 karakter (termasuk titik)</span>
+  1029→                  </div>
+  1030→                  <div className="flex items-center gap-1">
+  1031→                    <Badge variant="secondary" className="text-[10px] px-1 py-0">n</Badge>
+  1032→                    <span>Panjang karakter lainnya</span>
+  1033→                  </div>
+  1034→                </div>
+  1035→              </motion.div>
+  1036→            )}
+  1037→
+  1038→            {/* Step 3: Result */}
+  1039→            {step === "result" && result && (
+  1040→              <motion.div
+  1041→                key="result"
+  1042→                initial={{ opacity: 0, scale: 0.95 }}
+  1043→                animate={{ opacity: 1, scale: 1 }}
+  1044→                className="space-y-4 py-8"
+  1045→              >
+  1046→                <div className="text-center space-y-4">
+  1047→                  <div className={`mx-auto w-20 h-20 rounded-full ${result.success ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30"} flex items-center justify-center`}>
+  1048→                    {result.success ? (
+  1049→                      <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+  1050→                    ) : (
+  1051→                      <AlertCircle className="w-10 h-10 text-red-600" />
+  1052→                    )}
+  1053→                  </div>
+  1054→                  <div>
+  1055→                    <h3 className="text-xl font-bold">
+  1056→                      {result.success ? "Import Berhasil!" : "Import Gagal"}
+  1057→                    </h3>
+  1058→                    <p className="text-sm text-muted-foreground mt-1">{result.message}</p>
+  1059→                  </div>
+  1060→                  <div className="flex justify-center gap-4 mt-4">
+  1061→                    <div className="text-center p-3 rounded-lg bg-muted/50">
+  1062→                      <div className="text-2xl font-bold text-primary">{result.imported}</div>
+  1063→                      <div className="text-xs text-muted-foreground">Total Diimpor</div>
+  1064→                    </div>
+  1065→                    <div className="text-center p-3 rounded-lg bg-muted/50">
+  1066→                      <div className="text-2xl font-bold text-emerald-600">{result.created}</div>
+  1067→                      <div className="text-xs text-muted-foreground">Data Baru</div>
+  1068→                    </div>
+  1069→                    <div className="text-center p-3 rounded-lg bg-muted/50">
+  1070→                      <div className="text-2xl font-bold text-amber-600">{result.updated}</div>
+  1071→                      <div className="text-xs text-muted-foreground">Diperbarui</div>
+  1072→                    </div>
+  1073→                  </div>
+  1074→                </div>
+  1075→              </motion.div>
+  1076→            )}
+  1077→          </AnimatePresence>
+  1078→        </div>
+  1079→
+  1080→        <DialogFooter className="px-6 pb-6 pt-2 border-t bg-muted/20">
+  1081→          <div className="flex items-center justify-between w-full">
+  1082→            <div className="text-xs text-muted-foreground">
+  1083→              {step === "preview" && `${selectedRows.size} baris dipilih untuk import`}
+  1084→            </div>
+  1085→            <div className="flex gap-2">
+  1086→              <Button variant="outline" onClick={() => onOpenChange(false)}>
+  1087→                {step === "result" ? "Tutup" : "Batal"}
+  1088→              </Button>
+  1089→              {step === "preview" && (
+  1090→                <Button
+  1091→                  onClick={doImport}
+  1092→                  disabled={importing || selectedRows.size === 0}
+  1093→                  className={`bg-gradient-to-r ${jenisGradients[jenis]} text-white`}
+  1094→                >
+  1095→                  {importing ? (
+  1096→                    <>
+  1097→                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+  1098→                      Mengimpor...
+  1099→                    </>
+  1100→                  ) : (
+  1101→                    <>
+  1102→                      <Upload className="w-4 h-4 mr-2" />
+  1103→                      Import {selectedRows.size} Baris
+  1104→                    </>
+  1105→                  )}
+  1106→                </Button>
+  1107→              )}
+  1108→            </div>
+  1109→          </div>
+  1110→        </DialogFooter>
+  1111→      </DialogContent>
+  1112→    </Dialog>
+  1113→  );
+  1114→}
+  1115→
