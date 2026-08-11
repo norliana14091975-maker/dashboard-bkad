@@ -438,6 +438,10 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
       // Try to extract nama akun (text before numbers) and amounts
       const { namaAkun, anggaran, realisasi } = parseLineData(afterCode)
 
+      // Rule: Skip kode rekening dengan anggaran = 0 DAN realisasi = 0
+      // Akun tanpa nilai apapun tidak perlu diimpor
+      if (anggaran === 0 && realisasi === 0) continue
+
       // Auto-detect jenis and kategori from kode akun prefix
       const detectedJenis = detectJenisFromKodeAkun(kodeAkun)
       const detectedKategori = detectedJenis
@@ -472,12 +476,15 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
 /**
  * Parse the text after a kode akun to extract nama akun and amounts.
  * Government PDFs (DPA/DPPA) typically have columns:
- *   KODE NAMA_AKUN ANGGARAN REALISASI_TAHUN_SEBELUMNYA REALISASI_TAHUN_AKTIF
- * When 3+ numbers are found, we only read:
- *   - First number = Anggaran
- *   - Last number = Realisasi Tahun Aktif
- *   - Middle numbers = Realisasi Tahun Sebelumnya (IGNORED)
- * When 2 numbers: first = Anggaran, second = Realisasi
+ *   Col 1: Kode Rekening (already extracted before calling this function)
+ *   Col 2: Nama Akun
+ *   Col 3: Anggaran
+ *   Col 4: Realisasi Tahun Aktif
+ *   Col 5+: Realisasi Tahun Sebelumnya, dll (IGNORED)
+ *
+ * Rule: Hanya baca kolom 1-4. Numbers beyond the 2nd (columns 5+) are ignored.
+ * Rule: Kode rekening dengan anggaran = 0 DAN realisasi = 0 akan diabaikan (skipped
+ *       by the caller after receiving the parsed result).
  */
 function parseLineData(text: string): { namaAkun: string; anggaran: number; realisasi: number } {
   if (!text || text.length === 0) {
@@ -509,16 +516,9 @@ function parseLineData(text: string): { namaAkun: string; anggaran: number; real
   let anggaran = 0
   let realisasi = 0
 
-  if (numbers.length >= 3) {
-    // 3+ numbers: anggaran, realisasi tahun sebelumnya (IGNORE), realisasi tahun aktif
-    // DPA/DPPA PDFs typically have columns:
-    //   Kode | Nama | Anggaran | Realisasi Tahun Sebelumnya | Realisasi Tahun Aktif
-    // We only read the anggaran (first) and realisasi tahun aktif (last)
-    namaAkun = text.substring(0, numbers[0].index).trim()
-    anggaran = numbers[0].value
-    realisasi = numbers[numbers.length - 1].value
-  } else if (numbers.length === 2) {
-    // 2 numbers: anggaran and realisasi (only one year)
+  if (numbers.length >= 2) {
+    // 2+ numbers: only read first 2 = Anggaran (col 3) and Realisasi Tahun Aktif (col 4)
+    // Numbers beyond the 2nd are columns 5+ and are IGNORED
     namaAkun = text.substring(0, numbers[0].index).trim()
     anggaran = numbers[0].value
     realisasi = numbers[1].value

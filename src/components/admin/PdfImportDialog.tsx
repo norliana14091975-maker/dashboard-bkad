@@ -806,8 +806,9 @@ export default function PdfImportDialog({
                   <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                     <li>Upload file PDF (DPA, APBD, dokumen keuangan)</li>
                     <li>Sistem otomatis mengekstrak <strong>kode akun 17 digit</strong> (termasuk titik) dari teks PDF</li>
-                    <li>Nama akun, anggaran, dan <strong>realisasi tahun aktif</strong> diekstrak jika tersedia</li>
-                    <li><strong>Realisasi tahun sebelumnya diabaikan</strong> — hanya realisasi tahun aktif yang dibaca</li>
+                    <li><strong>Hanya membaca kolom 1–4</strong>: Kode Rekening, Nama Akun, Anggaran, Realisasi</li>
+                    <li>Kolom ke-5 dan seterusnya (realisasi tahun sebelumnya, dll) <strong>diabaikan</strong></li>
+                    <li>Kode rekening dengan <strong>anggaran = 0 dan realisasi = 0</strong> otomatis <strong>dilewati</strong></li>
                     <li>Anda dapat mengedit data sebelum mengimpor ke database</li>
                     <li>OPD User hanya dapat mengimpor ke OPD sendiri</li>
                     <li>Admin / Super Admin dapat memilih OPD tujuan</li>

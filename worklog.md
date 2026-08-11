@@ -321,3 +321,22 @@ Stage Summary:
 - allSelected is now a derived value, not independent state
 - Both import modals are significantly larger for better data preview
 - Column header clarifies "Realisasi Thn Aktif"
+
+---
+Task ID: 2
+Agent: main
+Task: Add rules: PDF import only read columns 1-4, skip accounts with anggaran=0 and realisasi=0
+
+Work Log:
+- Modified parseLineData() in import-pdf/route.ts to only read first 2 numbers (Anggaran + Realisasi = cols 3-4)
+- Previously when 3+ numbers found, it took first and last; now consistently takes first 2 only
+- Added filter after parseLineData: if (anggaran === 0 && realisasi === 0) continue
+- Updated JSDoc comments to document the column 1-4 rule and zero-value skip rule
+- Updated PdfImportDialog help text to explain both rules clearly
+- Ran lint: clean
+- Dev server running without errors
+
+Stage Summary:
+- PDF import now only reads columns 1-4 (Kode, Nama, Anggaran, Realisasi)
+- Columns 5+ (realisasi tahun sebelumnya, etc.) are ignored
+- Accounts with both anggaran=0 AND realisasi=0 are automatically skipped
