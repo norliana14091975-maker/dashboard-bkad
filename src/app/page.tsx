@@ -167,6 +167,12 @@ export default function Home() {
     window.location.reload();
   }, []);
 
+  // Memoized loader exit callback to prevent infinite re-render loop
+  // (auto-refresh countdown causes frequent re-renders, recreating the inline arrow function)
+  const handleLoaderExitComplete = useCallback(() => {
+    setLoaderExiting(false);
+  }, []);
+
   // Helper: check if a view is hidden for the current user role
   const isViewHidden = useCallback((viewId: string): boolean => {
     const userRole = user?.role || "public";
@@ -305,7 +311,7 @@ export default function Home() {
     // Modern loader: keep showing during fade-out animation
     if (loading || loaderExiting) {
       if (pengaturan.loaderType === "modern") {
-        return <ModernSplashLoader isLoading={loading} onExitComplete={() => setLoaderExiting(false)} />;
+        return <ModernSplashLoader isLoading={loading} onExitComplete={handleLoaderExitComplete} />;
       }
       if (loading) return <LoadingSkeleton />;
     }
