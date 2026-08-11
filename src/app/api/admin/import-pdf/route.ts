@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
     if (extractedData.length === 0) {
       return NextResponse.json({
-        error: 'Tidak ditemukan kode akun 17 digit (termasuk titik) dalam PDF ini',
+        error: 'Tidak ditemukan kode akun 17 digit atau lebih dalam PDF ini. Kode akun kurang dari 17 digit (header/kelompok) dilewati.',
         totalLinesScanned: 0,
       }, { status: 400 })
     }
@@ -373,9 +373,11 @@ async function extractAkunFromPdf(buffer: Buffer): Promise<ExtractedAkun[]> {
     while ((match = pattern.exec(line)) !== null) {
       const kodeAkun = match[1]
 
-      // Filter: must be around 17 characters (allow 13-25 to capture various formats)
-      // The user specified "17 digit termasuk (.)" so we prioritize exact 17 but allow nearby
-      if (kodeAkun.length < 13 || kodeAkun.length > 25) continue
+      // Filter: minimum 17 characters (including dots)
+      // Codes with < 17 chars are group/header/subtotal codes — skip them
+      // Examples of skipped codes: "5.1" (3), "5.1.01" (6), "5.1.01.01" (9), "4.1.1" (5)
+      // Examples of valid codes: "4.1.04.01.02.0055" (17), "5.1.01.01.001.00001" (19)
+      if (kodeAkun.length < 17) continue
 
       // Must have at least 3 dot-separated segments
       const segments = kodeAkun.split('.')
