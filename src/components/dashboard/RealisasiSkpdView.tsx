@@ -171,12 +171,8 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
   const totalPersentase = safePercentage(totalRealisasi, totalAnggaran);
 
   // ─── Category Breakdowns (sesuai Permendagri 90/2019) ─────────────────────
-  // Pendapatan Daerah = PAD + Transfer + Lain-lain Pendapatan yang Sah
-  const padList = data.pendapatan.filter((p) => p.kategori === "PAD");
-  const totalPADAnggaran = padList.reduce((s, p) => s + p.anggaran, 0);
-  const totalPADRealisasi = padList.reduce((s, p) => s + p.realisasi, 0);
-  const persentasePAD = safePercentage(totalPADRealisasi, totalPADAnggaran);
-
+  // Struktur APBD: Pendapatan Daerah, Belanja Daerah, Pembiayaan
+  // (PAD adalah sub-kategori dari Pendapatan, bukan kategori utama)
   const totalPendapatanAnggaran = data.pendapatan.reduce((s, p) => s + p.anggaran, 0);
   const totalPendapatanRealisasi = data.pendapatan.reduce((s, p) => s + p.realisasi, 0);
   const persentasePendapatan = safePercentage(totalPendapatanRealisasi, totalPendapatanAnggaran);
@@ -375,42 +371,7 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
               {filteredItems.length} OPD · TA {data.tahun}
             </Badge>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-4 print:gap-2">
-            {/* Total Pendapatan (PAD) */}
-            <div className="bg-teal-50 dark:bg-teal-950/20 rounded-lg p-3 border border-teal-200 dark:border-teal-800 print:bg-gray-50 print:border-gray-200">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <Wallet className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <p className="text-[10px] lg:text-xs text-teal-600 dark:text-teal-400 print:text-gray-500 font-semibold uppercase tracking-wide">
-                  Pendapatan (PAD)
-                </p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-[9px] text-muted-foreground uppercase">Anggaran</span>
-                  <p className="text-xs lg:text-sm font-bold text-teal-800 dark:text-teal-200 print:text-black">
-                    <RupiahCell value={totalPADAnggaran} />
-                  </p>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-[9px] text-muted-foreground uppercase">Realisasi</span>
-                  <p className="text-xs lg:text-sm font-bold text-teal-700 dark:text-teal-300">
-                    <RupiahCell value={totalPADRealisasi} />
-                  </p>
-                </div>
-                <div className="flex items-center justify-between pt-0.5">
-                  <div className="flex-1 h-1.5 bg-teal-200 dark:bg-teal-800 rounded-full overflow-hidden mr-2">
-                    <div
-                      className="h-full bg-teal-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(persentasePAD, 100)}%` }}
-                    />
-                  </div>
-                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(persentasePAD)}`}>
-                    {formatPersentase(persentasePAD)}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 print:grid-cols-3 print:gap-2">
             {/* Total Pendapatan Daerah */}
             <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 print:bg-gray-50 print:border-gray-200">
               <div className="flex items-center gap-1.5 mb-1.5">
@@ -753,31 +714,7 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Row 1: Pendapatan (PAD) */}
-                  <TableRow className="hover:bg-teal-50/50 dark:hover:bg-teal-950/10">
-                    <TableCell className="text-xs font-semibold pl-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-teal-500" />
-                        Pendapatan (PAD)
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium">
-                      <RupiahCell value={totalPADAnggaran} />
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-bold text-teal-700 dark:text-teal-300">
-                      <RupiahCell value={totalPADRealisasi} className="text-teal-700 dark:text-teal-300" />
-                    </TableCell>
-                    <TableCell className={`text-xs text-right font-semibold ${totalPADAnggaran - totalPADRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
-                      <RupiahCell value={Math.abs(totalPADAnggaran - totalPADRealisasi)} prefix={totalPADAnggaran - totalPADRealisasi < 0 ? "+" : ""} className={totalPADAnggaran - totalPADRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
-                    </TableCell>
-                    <TableCell className="text-center pr-4">
-                      <Badge className={`text-[10px] px-2 py-0.5 h-5 border ${getRealisasiBadgeClass(persentasePAD)}`}>
-                        {formatPersentase(persentasePAD)}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Row 2: Total Pendapatan */}
+                  {/* Row 1: Total Pendapatan */}
                   <TableRow className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10">
                     <TableCell className="text-xs font-semibold pl-4">
                       <div className="flex items-center gap-2">
@@ -801,7 +738,7 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
                     </TableCell>
                   </TableRow>
 
-                  {/* Row 3: Total Belanja */}
+                  {/* Row 2: Total Belanja */}
                   <TableRow className="hover:bg-red-50/50 dark:hover:bg-red-950/10">
                     <TableCell className="text-xs font-semibold pl-4">
                       <div className="flex items-center gap-2">
@@ -825,7 +762,7 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
                     </TableCell>
                   </TableRow>
 
-                  {/* Row 4: Total Pembiayaan */}
+                  {/* Row 3: Total Pembiayaan */}
                   <TableRow className="hover:bg-amber-50/50 dark:hover:bg-amber-950/10">
                     <TableCell className="text-xs font-semibold pl-4">
                       <div className="flex items-center gap-2">
@@ -864,9 +801,6 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
                 Jumlah OPD Tercatat: {filteredItems.length}
               </span>
               <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-teal-500" /> PAD
-                </span>
                 <span className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" /> Pendapatan
                 </span>
