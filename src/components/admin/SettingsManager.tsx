@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,11 @@ import {
   WifiOff,
   Zap,
   RefreshCw,
+  Database,
+  Download,
+  HardDrive,
+  FileJson,
+  CheckCircle,
 } from "lucide-react";
 import { usePengaturan } from "@/context/PengaturanContext";
 import { Switch } from "@/components/ui/switch";
@@ -106,6 +112,9 @@ const DEFAULT_SETTINGS: Omit<PengaturanData, "id"> = {
 const SIDEBAR_ITEMS = [
   { id: "dashboard", label: "Dashboard", group: "Utama" },
   { id: "ringkasan-eksekutif", label: "Ringkasan Eksekutif", group: "Utama" },
+  { id: "perbandingan-antartahun", label: "Perbandingan Tahun", group: "Utama" },
+  { id: "forecasting", label: "Forecasting & Proyeksi", group: "Utama" },
+  { id: "peta-infrastruktur", label: "Peta Infrastruktur", group: "Utama" },
   { id: "analisis-risiko", label: "Analisis Risiko", group: "Utama" },
   { id: "copilot", label: "AI Copilot", group: "Utama" },
   { id: "apbd", label: "APBD", group: "Anggaran" },
@@ -167,6 +176,19 @@ export default function SettingsManager() {
   const [loaderImageSizeWarning, setLoaderImageSizeWarning] = useState(false);
   const [resettingSetup, setResettingSetup] = useState(false);
   const [activeSidebarRole, setActiveSidebarRole] = useState<string>("admin");
+
+  // Backup & Restore state
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    version: string;
+    timestamp: string;
+    counts: Record<string, number>;
+    tables: string[];
+  } | null>(null);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
   const [testResults, setTestResults] = useState<Record<string, { status: 'success' | 'error' | 'loading'; message: string; latency?: number }> | null>(null);
   const [testingAll, setTestingAll] = useState(false);
@@ -1481,6 +1503,31 @@ export default function SettingsManager() {
             />
           </div>
 
+          {/* Floating Bubble Toggle — only show when copilot is enabled */}
+          {(form.copilotConfig?.enabled ?? DEFAULT_COPILOT_CONFIG.enabled) && (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <Sparkles className="w-4.5 h-4.5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Balon Mengambang (Mobile)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Tampilkan tombol mengambang AI Copilot di pojok kanan bawah pada mode smartphone
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={form.copilotConfig?.floatingBubbleEnabled ?? DEFAULT_COPILOT_CONFIG.floatingBubbleEnabled}
+                onCheckedChange={(checked) => {
+                  const current = form.copilotConfig || DEFAULT_COPILOT_CONFIG;
+                  setForm((prev) => ({ ...prev, copilotConfig: { ...current, floatingBubbleEnabled: checked } }));
+                }}
+                className="data-[state=checked]:bg-violet-500"
+              />
+            </div>
+          )}
+
           {(form.copilotConfig?.enabled ?? DEFAULT_COPILOT_CONFIG.enabled) && (
             <>
               {/* ═══ Provider & API Key ═══ */}
@@ -1977,6 +2024,266 @@ export default function SettingsManager() {
             <p className="text-xs text-amber-700">
               Setup wizard akan muncul saat halaman di-refresh. Pastikan Anda mengingat kredensial admin yang ada.
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 9: Backup & Restore Database */}
+      <Card className="shadow-md border-0">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Database className="w-5 h-5 text-primary" />
+            Backup & Restore Database
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <p className="text-sm text-muted-foreground">
+            Cadangkan seluruh data aplikasi ke file JSON, atau pulihkan dari backup sebelumnya. Backup mencakup semua data termasuk tahun anggaran, pendapatan, belanja, pembiayaan, realisasi, OPD, pengguna, dan pengaturan.
+          </p>
+
+          {/* Backup */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={async () => {
+                setBackingUp(true);
+                try {
+                  const res = await fetch("/api/admin/backup");
+                  if (!res.ok) throw new Error("Gagal membuat backup");
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  // Extract filename from Content-Disposition header
+                  const disposition = res.headers.get("Content-Disposition");
+                  const filenameMatch = disposition?.match(/filename="?(.+?)"?$/);
+                  a.download = filenameMatch?.[1] || `backup-seruyan-${new Date().toISOString().slice(0, 10)}.json`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  toast({
+                    title: "Backup Berhasil",
+                    description: `File backup ${a.download} berhasil diunduh.`,
+                  });
+                } catch (error) {
+                  toast({
+                    title: "Backup Gagal",
+                    description: error instanceof Error ? error.message : "Gagal membuat backup database",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setBackingUp(false);
+                }
+              }}
+              disabled={backingUp || restoring}
+              className="gap-2 min-w-[180px]"
+              variant="outline"
+            >
+              {backingUp ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Membuat Backup...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Backup
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={() => restoreFileInputRef.current?.click()}
+              disabled={restoring || backingUp}
+              className="gap-2 min-w-[180px]"
+              variant="outline"
+            >
+              <Upload className="w-4 h-4" />
+              Pulihkan dari Backup
+            </Button>
+            <input
+              ref={restoreFileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setRestoreFile(file);
+                try {
+                  const text = await file.text();
+                  const data = JSON.parse(text);
+                  if (!data.version || !data.data || !data.tables) {
+                    toast({
+                      title: "File Tidak Valid",
+                      description: "File yang dipilih bukan file backup yang valid.",
+                      variant: "destructive",
+                    });
+                    setRestoreFile(null);
+                    return;
+                  }
+                  setRestorePreview({
+                    version: data.version,
+                    timestamp: data.timestamp,
+                    counts: data.counts,
+                    tables: data.tables,
+                  });
+                  setRestoreConfirmOpen(true);
+                } catch {
+                  toast({
+                    title: "File Tidak Valid",
+                    description: "File tidak dapat dibaca. Pastikan file backup dalam format JSON yang benar.",
+                    variant: "destructive",
+                  });
+                  setRestoreFile(null);
+                }
+                // Reset file input
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          {/* Restore confirmation dialog */}
+          {restoreConfirmOpen && restorePreview && (
+            <div className="border-2 border-red-200 rounded-lg p-4 bg-red-50/50 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-bold text-red-800">Konfirmasi Restore Database</h4>
+                  <p className="text-xs text-red-700 mt-1">
+                    <strong>PERINGATAN:</strong> Semua data yang ada saat ini akan dihapus dan diganti dengan data dari backup. Tindakan ini tidak dapat dibatalkan!
+                  </p>
+                </div>
+              </div>
+
+              {/* Backup file info */}
+              <div className="grid grid-cols-2 gap-2 text-xs bg-white/60 rounded-lg p-3 border">
+                <div>
+                  <span className="text-muted-foreground">Versi Backup:</span>
+                  <span className="font-semibold ml-1">{restorePreview.version}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Tanggal Backup:</span>
+                  <span className="font-semibold ml-1">
+                    {new Date(restorePreview.timestamp).toLocaleString("id-ID", {
+                      dateStyle: "long",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Table counts */}
+              <div className="bg-white/60 rounded-lg p-3 border max-h-48 overflow-y-auto">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Data yang akan dipulihkan:</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                  {restorePreview.tables.map((table) => {
+                    const count = restorePreview.counts[table] || 0;
+                    const labelMap: Record<string, string> = {
+                      tahunAnggaran: "Tahun Anggaran",
+                      opd: "OPD",
+                      kategori: "Kategori",
+                      pendapatan: "Pendapatan",
+                      pendapatanHistory: "Riwayat Pendapatan",
+                      belanja: "Belanja",
+                      belanjaHistory: "Riwayat Belanja",
+                      pembiayaan: "Pembiayaan",
+                      pembiayaanHistory: "Riwayat Pembiayaan",
+                      realisasiAkun: "Realisasi Akun",
+                      realisasiAkunHistory: "Riwayat Realisasi Akun",
+                      realisasiSkpd: "Realisasi SKPD",
+                      realisasiSkpdHistory: "Riwayat Realisasi SKPD",
+                      user: "Pengguna",
+                      pengaturanAplikasi: "Pengaturan",
+                      pengunjung: "Pengunjung",
+                      sipdSyncLog: "Log SIPD",
+                    };
+                    return (
+                      <div key={table} className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{labelMap[table] || table}</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-2">
+                          {count}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setRestoreConfirmOpen(false);
+                    setRestorePreview(null);
+                    setRestoreFile(null);
+                  }}
+                  disabled={restoring}
+                >
+                  Batal
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={restoring}
+                  onClick={async () => {
+                    if (!restoreFile) return;
+                    setRestoring(true);
+                    try {
+                      const text = await restoreFile.text();
+                      const backupData = JSON.parse(text);
+                      const res = await fetch("/api/admin/backup", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(backupData),
+                      });
+                      if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.error || "Gagal memulihkan database");
+                      }
+                      const result = await res.json();
+                      toast({
+                        title: "Restore Berhasil",
+                        description: "Database berhasil dipulihkan. Halaman akan di-refresh.",
+                      });
+                      // Refresh after a short delay
+                      setTimeout(() => window.location.reload(), 1500);
+                    } catch (error) {
+                      toast({
+                        title: "Restore Gagal",
+                        description: error instanceof Error ? error.message : "Gagal memulihkan database",
+                        variant: "destructive",
+                      });
+                      setRestoring(false);
+                    }
+                  }}
+                  className="gap-2"
+                >
+                  {restoring ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Memulihkan...
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-3.5 h-3.5" />
+                      Ya, Restore Database
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Info box */}
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-700 space-y-1">
+              <p><strong>Backup</strong> menyimpan seluruh data database dalam format JSON yang dapat diunduh.</p>
+              <p><strong>Restore</strong> menghapus semua data saat ini dan menggantinya dengan data dari file backup.</p>
+              <p>Disarankan untuk membuat backup secara berkala, terutama sebelum melakukan perubahan besar.</p>
+            </div>
           </div>
         </CardContent>
       </Card>
