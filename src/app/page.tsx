@@ -21,8 +21,6 @@ import AnalisisRisikoView from "@/components/dashboard/AnalisisRisikoView";
 import FinancialCopilotView from "@/components/dashboard/FinancialCopilotView";
 import PerbandinganAntarTahunView from "@/components/dashboard/PerbandinganAntarTahunView";
 import FloatingCopilot from "@/components/dashboard/FloatingCopilot";
-import ForecastingView from "@/components/dashboard/ForecastingView";
-import PetaInfrastrukturView from "@/components/dashboard/PetaInfrastrukturView";
 import {
   DashboardData,
   ActiveView,
