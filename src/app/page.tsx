@@ -19,6 +19,10 @@ import OpdView from "@/components/dashboard/OpdView";
 import ExecutiveSummaryView from "@/components/dashboard/ExecutiveSummaryView";
 import AnalisisRisikoView from "@/components/dashboard/AnalisisRisikoView";
 import FinancialCopilotView from "@/components/dashboard/FinancialCopilotView";
+import PerbandinganAntarTahunView from "@/components/dashboard/PerbandinganAntarTahunView";
+import FloatingCopilot from "@/components/dashboard/FloatingCopilot";
+import ForecastingView from "@/components/dashboard/ForecastingView";
+import PetaInfrastrukturView from "@/components/dashboard/PetaInfrastrukturView";
 import {
   DashboardData,
   ActiveView,
@@ -343,6 +347,12 @@ export default function Home() {
         return <OpdView data={data} />;
       case "transparansi":
         return <TransparansiView data={data} />;
+      case "perbandingan-antartahun":
+        return <PerbandinganAntarTahunView data={data} />;
+      case "forecasting":
+        return <ForecastingView data={data} />;
+      case "peta-infrastruktur":
+        return <PetaInfrastrukturView tahun={tahun} />;
       default:
         return <DashboardView data={data} />;
     }
@@ -454,6 +464,9 @@ export default function Home() {
         onViewChange={handleViewChange}
         onOpenSidebar={() => setSidebarOpen(true)}
       />
+
+      {/* Floating AI Copilot Bubble — shown only on mobile */}
+      <FloatingCopilot data={data} />
     </div>
   );
 }
