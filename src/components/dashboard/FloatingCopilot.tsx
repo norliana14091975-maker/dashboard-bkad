@@ -98,6 +98,7 @@ export default function FloatingCopilot({ data }: FloatingCopilotProps) {
   const { pengaturan } = usePengaturan();
   const copilotConfig = pengaturan.copilotConfig || DEFAULT_COPILOT_CONFIG;
   const copilotEnabled = copilotConfig.enabled;
+  const floatingBubbleEnabled = copilotConfig.floatingBubbleEnabled ?? true;
   const welcomeMsg = copilotConfig.welcomeMessage || DEFAULT_COPILOT_CONFIG.welcomeMessage;
 
   const [isOpen, setIsOpen] = useState(false);
@@ -201,8 +202,8 @@ export default function FloatingCopilot({ data }: FloatingCopilotProps) {
     inputRef.current?.focus();
   };
 
-  // Don't render if copilot is disabled or no data
-  if (!copilotEnabled || !data) return null;
+  // Don't render if copilot is disabled, floating bubble is disabled, or no data
+  if (!copilotEnabled || !floatingBubbleEnabled || !data) return null;
 
   return (
     <>
