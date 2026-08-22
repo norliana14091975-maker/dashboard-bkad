@@ -20,6 +20,7 @@ export type AiApiKeys = {
 
 export type CopilotConfig = {
   enabled: boolean;
+  floatingBubbleEnabled: boolean; // Show floating AI Copilot bubble on mobile
   provider: string;       // "z-ai" | "openai" | "custom"
   model: string;          // model name
   systemPrompt: string;   // custom system prompt
@@ -36,6 +37,7 @@ export const DEFAULT_AI_API_KEYS: AiApiKeys = {
 
 export const DEFAULT_COPILOT_CONFIG: CopilotConfig = {
   enabled: true,
+  floatingBubbleEnabled: true,
   provider: "z-ai",
   model: "default",
   systemPrompt: "",
