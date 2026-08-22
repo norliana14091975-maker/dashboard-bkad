@@ -23,6 +23,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Landmark,
+  Banknote,
+  Scale,
+  ShieldCheck,
 } from "lucide-react";
 import APBDTable from "./APBDTable";
 
@@ -90,118 +93,165 @@ export default function TransparansiView({ data }: TransparansiViewProps) {
               <div className="p-2.5 sm:p-3 rounded-xl bg-emerald-100 shrink-0">
                 <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-700" />
               </div>
-              <div className="min-w-0">
-                <h2 className="text-base sm:text-lg font-bold text-foreground">
-                  Transparansi Keuangan Daerah
-                </h2>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h2 className="text-base sm:text-lg font-bold text-foreground">
+                    Transparansi Keuangan Daerah
+                  </h2>
+                  <Badge variant="outline" className="text-[10px] gap-1">
+                    <ShieldCheck className="w-3 h-3" />
+                    TA {data.tahun}
+                  </Badge>
+                </div>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   Pemerintah Kabupaten Seruyan berkomitmen untuk memberikan
                   transparansi dalam pengelolaan keuangan daerah. Data APBD dan
-                  Realisasi tersedia untuk diakses publik sesuai amanat UU No. 14
-                  Tahun 2008 tentang Keterbukaan Informasi Publik.
+                  Realisasi tersedia untuk diakses publik sesuai amanat:
                 </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Badge variant="secondary" className="text-[10px] gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                    <FileText className="w-3 h-3" />
+                    Permendagri 90/2019
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px] gap-1 bg-blue-100 text-blue-700 hover:bg-blue-100">
+                    <Eye className="w-3 h-3" />
+                    UU 14/2008 (KIP)
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px] gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100">
+                    <Landmark className="w-3 h-3" />
+                    UU 23/2014 (PD)
+                  </Badge>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* ── Summary Metric Cards ── */}
+      {/* ── Summary Metric Cards — 3 Kategori APBD + SilPA sesuai Permendagri 90/2019 ── */}
       <motion.div variants={itemVariants}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Total APBD */}
-          <Card className="shadow-sm border-0 bg-gradient-to-br from-slate-50 to-white overflow-hidden">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-md bg-slate-100">
-                  <Landmark className="w-3.5 h-3.5 text-slate-600" />
+        <div className="space-y-2">
+          <h3
+            className="text-xs font-bold uppercase tracking-wide text-muted-foreground px-1"
+          >
+            Ringkasan APBD per Kategori
+          </h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Total Pendapatan Daerah */}
+            <Card className="shadow-sm border-0 bg-gradient-to-br from-emerald-50 to-white overflow-hidden">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 rounded-md bg-emerald-100">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Pendapatan Daerah
+                  </span>
                 </div>
-                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Total APBD
-                </span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-foreground truncate">
-                {formatRupiahShort(totalPendapatan + totalBelanja + totalPembiayaan)}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                TA {data.tahun}
-              </p>
-            </CardContent>
-          </Card>
+                <p className="text-sm sm:text-base font-bold text-emerald-700 truncate">
+                  {formatRupiahShort(totalPendapatan)}
+                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <ArrowUpRight className="w-3 h-3 text-emerald-500" />
+                  <Badge
+                    className={`text-[9px] px-1 py-0 h-4 border ${getRealisasiBadgeClass(pctPendapatan)}`}
+                  >
+                    {formatPersentase(pctPendapatan)}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Pendapatan */}
-          <Card className="shadow-sm border-0 bg-gradient-to-br from-emerald-50 to-white overflow-hidden">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-md bg-emerald-100">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+            {/* Total Belanja Daerah */}
+            <Card className="shadow-sm border-0 bg-gradient-to-br from-red-50 to-white overflow-hidden">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 rounded-md bg-red-100">
+                    <TrendingDown className="w-3.5 h-3.5 text-red-600" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Belanja Daerah
+                  </span>
                 </div>
-                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Pendapatan
-                </span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-emerald-700 truncate">
-                {formatRupiahShort(totalPendapatan)}
-              </p>
-              <div className="flex items-center gap-1 mt-1">
-                <ArrowUpRight className="w-3 h-3 text-emerald-500" />
-                <Badge
-                  className={`text-[9px] px-1 py-0 h-4 border ${getRealisasiBadgeClass(pctPendapatan)}`}
+                <p className="text-sm sm:text-base font-bold text-red-700 truncate">
+                  {formatRupiahShort(totalBelanja)}
+                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <ArrowDownRight className="w-3 h-3 text-red-500" />
+                  <Badge
+                    className={`text-[9px] px-1 py-0 h-4 border ${getRealisasiBadgeClass(pctBelanja)}`}
+                  >
+                    {formatPersentase(pctBelanja)}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Pembiayaan */}
+            <Card className="shadow-sm border-0 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 rounded-md bg-amber-100">
+                    <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Pembiayaan
+                  </span>
+                </div>
+                <p className="text-sm sm:text-base font-bold text-amber-700 truncate">
+                  {formatRupiahShort(totalPembiayaan)}
+                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <Wallet className="w-3 h-3 text-amber-500" />
+                  <Badge
+                    className={`text-[9px] px-1 py-0 h-4 border ${getRealisasiBadgeClass(pctPembiayaan)}`}
+                  >
+                    {formatPersentase(pctPembiayaan)}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* SilPA / Defisit — Sisa Lebih Pembiayaan Anggaran */}
+            <Card
+              className={`shadow-sm border-0 bg-gradient-to-br overflow-hidden ${
+                surplus >= 0
+                  ? "from-teal-50 to-white"
+                  : "from-red-50 to-white"
+              }`}
+            >
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div
+                    className={`p-1.5 rounded-md ${
+                      surplus >= 0 ? "bg-teal-100" : "bg-red-100"
+                    }`}
+                  >
+                    <Scale
+                      className={`w-3.5 h-3.5 ${
+                        surplus >= 0 ? "text-teal-600" : "text-red-600"
+                      }`}
+                    />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {surplus >= 0 ? "SilPA" : "Defisit"}
+                  </span>
+                </div>
+                <p
+                  className={`text-sm sm:text-base font-bold truncate ${
+                    surplus >= 0 ? "text-teal-700" : "text-red-700"
+                  }`}
                 >
-                  {formatPersentase(pctPendapatan)}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Belanja */}
-          <Card className="shadow-sm border-0 bg-gradient-to-br from-red-50 to-white overflow-hidden">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-md bg-red-100">
-                  <TrendingDown className="w-3.5 h-3.5 text-red-600" />
-                </div>
-                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Belanja
-                </span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-red-700 truncate">
-                {formatRupiahShort(totalBelanja)}
-              </p>
-              <div className="flex items-center gap-1 mt-1">
-                <ArrowDownRight className="w-3 h-3 text-red-500" />
-                <Badge
-                  className={`text-[9px] px-1 py-0 h-4 border ${getRealisasiBadgeClass(pctBelanja)}`}
-                >
-                  {formatPersentase(pctBelanja)}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Surplus/Defisit */}
-          <Card className="shadow-sm border-0 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 rounded-md bg-amber-100">
-                  <Wallet className="w-3.5 h-3.5 text-amber-600" />
-                </div>
-                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {surplus >= 0 ? "Surplus" : "Defisit"}
-                </span>
-              </div>
-              <p
-                className={`text-sm sm:text-base font-bold truncate ${
-                  surplus >= 0 ? "text-amber-700" : "text-red-700"
-                }`}
-              >
-                {formatRupiahShort(Math.abs(surplus))}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                {surplus >= 0 ? "Pendapatan > Belanja" : "Belanja > Pendapatan"}
-              </p>
-            </CardContent>
-          </Card>
+                  {formatRupiahShort(Math.abs(surplus))}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {surplus >= 0
+                    ? "Sisa Lebih Pembiayaan Anggaran"
+                    : "Belanja > Pendapatan"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </motion.div>
 
@@ -226,7 +276,7 @@ export default function TransparansiView({ data }: TransparansiViewProps) {
           <TabsContent value="realisasi" className="mt-4">
             <Card className="shadow-md border-0">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap">
                   <div className="p-1.5 rounded-md bg-amber-100">
                     <CheckCircle className="w-4 h-4 text-amber-700" />
                   </div>
@@ -235,6 +285,9 @@ export default function TransparansiView({ data }: TransparansiViewProps) {
                     TA {data.tahun}
                   </Badge>
                 </CardTitle>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Sesuai struktur Permendagri 90/2019 — Pendapatan Daerah, Belanja Daerah & Pembiayaan
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Ringkasan Realisasi Cards */}
