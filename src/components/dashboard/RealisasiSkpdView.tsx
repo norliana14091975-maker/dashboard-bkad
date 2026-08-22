@@ -165,10 +165,29 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
     return groups;
   }, [sortedItems]);
 
-  // Totals
+  // Totals from SKPD list
   const totalAnggaran = filteredItems.reduce((s, i) => s + i.anggaran, 0);
   const totalRealisasi = filteredItems.reduce((s, i) => s + i.realisasi, 0);
   const totalPersentase = safePercentage(totalRealisasi, totalAnggaran);
+
+  // ─── Category Breakdowns (sesuai Permendagri 90/2019) ─────────────────────
+  // Pendapatan Daerah = PAD + Transfer + Lain-lain Pendapatan yang Sah
+  const padList = data.pendapatan.filter((p) => p.kategori === "PAD");
+  const totalPADAnggaran = padList.reduce((s, p) => s + p.anggaran, 0);
+  const totalPADRealisasi = padList.reduce((s, p) => s + p.realisasi, 0);
+  const persentasePAD = safePercentage(totalPADRealisasi, totalPADAnggaran);
+
+  const totalPendapatanAnggaran = data.pendapatan.reduce((s, p) => s + p.anggaran, 0);
+  const totalPendapatanRealisasi = data.pendapatan.reduce((s, p) => s + p.realisasi, 0);
+  const persentasePendapatan = safePercentage(totalPendapatanRealisasi, totalPendapatanAnggaran);
+
+  const totalBelanjaAnggaran = data.belanja.reduce((s, b) => s + b.anggaran, 0);
+  const totalBelanjaRealisasi = data.belanja.reduce((s, b) => s + b.realisasi, 0);
+  const persentaseBelanja = safePercentage(totalBelanjaRealisasi, totalBelanjaAnggaran);
+
+  const totalPembiayaanAnggaran = data.pembiayaan.reduce((s, p) => s + p.anggaran, 0);
+  const totalPembiayaanRealisasi = data.pembiayaan.reduce((s, p) => s + p.realisasi, 0);
+  const persentasePembiayaan = safePercentage(totalPembiayaanRealisasi, totalPembiayaanAnggaran);
 
   // Get latest update date from data
   const latestUpdateDate = items.length > 0
@@ -343,39 +362,159 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="px-4 lg:px-6 py-4 grid grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-4 print:gap-2">
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 print:bg-gray-50 print:border-gray-200">
-            <p className="text-[10px] lg:text-xs text-emerald-600 dark:text-emerald-400 print:text-gray-500 font-medium uppercase tracking-wide">
-              Total Anggaran
-            </p>
-            <p className="text-sm lg:text-base font-bold text-emerald-800 dark:text-emerald-200 print:text-black mt-0.5">
-              <RupiahCell value={totalAnggaran} />
-            </p>
+        {/* Summary Cards — Breakdown sesuai Permendagri 90/2019 */}
+        <div className="px-4 lg:px-6 py-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: pengaturan.warnaPrimary }}
+            >
+              Ringkasan APBD per Kategori
+            </h3>
+            <Badge variant="outline" className="text-[10px]">
+              {filteredItems.length} OPD · TA {data.tahun}
+            </Badge>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800 print:bg-gray-50 print:border-gray-200">
-            <p className="text-[10px] lg:text-xs text-blue-600 dark:text-blue-400 print:text-gray-500 font-medium uppercase tracking-wide">
-              Total Realisasi
-            </p>
-            <p className="text-sm lg:text-base font-bold text-blue-800 dark:text-blue-200 print:text-black mt-0.5">
-              <RupiahCell value={totalRealisasi} />
-            </p>
-          </div>
-          <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-3 border border-amber-200 dark:border-amber-800 print:bg-gray-50 print:border-gray-200">
-            <p className="text-[10px] lg:text-xs text-amber-600 dark:text-amber-400 print:text-gray-500 font-medium uppercase tracking-wide">
-              Persentase
-            </p>
-            <p className="text-sm lg:text-base font-bold text-amber-800 dark:text-amber-200 print:text-black mt-0.5">
-              {formatPersentase(totalPersentase)}
-            </p>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-950/20 rounded-lg p-3 border border-purple-200 dark:border-purple-800 print:bg-gray-50 print:border-gray-200">
-            <p className="text-[10px] lg:text-xs text-purple-600 dark:text-purple-400 print:text-gray-500 font-medium uppercase tracking-wide">
-              Jumlah OPD
-            </p>
-            <p className="text-sm lg:text-base font-bold text-purple-800 dark:text-purple-200 print:text-black mt-0.5">
-              {filteredItems.length} OPD
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-4 print:gap-2">
+            {/* Total Pendapatan (PAD) */}
+            <div className="bg-teal-50 dark:bg-teal-950/20 rounded-lg p-3 border border-teal-200 dark:border-teal-800 print:bg-gray-50 print:border-gray-200">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Wallet className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                <p className="text-[10px] lg:text-xs text-teal-600 dark:text-teal-400 print:text-gray-500 font-semibold uppercase tracking-wide">
+                  Pendapatan (PAD)
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Anggaran</span>
+                  <p className="text-xs lg:text-sm font-bold text-teal-800 dark:text-teal-200 print:text-black">
+                    <RupiahCell value={totalPADAnggaran} />
+                  </p>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Realisasi</span>
+                  <p className="text-xs lg:text-sm font-bold text-teal-700 dark:text-teal-300">
+                    <RupiahCell value={totalPADRealisasi} />
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex-1 h-1.5 bg-teal-200 dark:bg-teal-800 rounded-full overflow-hidden mr-2">
+                    <div
+                      className="h-full bg-teal-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(persentasePAD, 100)}%` }}
+                    />
+                  </div>
+                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(persentasePAD)}`}>
+                    {formatPersentase(persentasePAD)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Pendapatan Daerah */}
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 print:bg-gray-50 print:border-gray-200">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <p className="text-[10px] lg:text-xs text-emerald-600 dark:text-emerald-400 print:text-gray-500 font-semibold uppercase tracking-wide">
+                  Total Pendapatan
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Anggaran</span>
+                  <p className="text-xs lg:text-sm font-bold text-emerald-800 dark:text-emerald-200 print:text-black">
+                    <RupiahCell value={totalPendapatanAnggaran} />
+                  </p>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Realisasi</span>
+                  <p className="text-xs lg:text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                    <RupiahCell value={totalPendapatanRealisasi} />
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex-1 h-1.5 bg-emerald-200 dark:bg-emerald-800 rounded-full overflow-hidden mr-2">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(persentasePendapatan, 100)}%` }}
+                    />
+                  </div>
+                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(persentasePendapatan)}`}>
+                    {formatPersentase(persentasePendapatan)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Belanja */}
+            <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-3 border border-red-200 dark:border-red-800 print:bg-gray-50 print:border-gray-200">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <CreditCard className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                <p className="text-[10px] lg:text-xs text-red-600 dark:text-red-400 print:text-gray-500 font-semibold uppercase tracking-wide">
+                  Total Belanja
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Anggaran</span>
+                  <p className="text-xs lg:text-sm font-bold text-red-800 dark:text-red-200 print:text-black">
+                    <RupiahCell value={totalBelanjaAnggaran} />
+                  </p>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Realisasi</span>
+                  <p className="text-xs lg:text-sm font-bold text-red-700 dark:text-red-300">
+                    <RupiahCell value={totalBelanjaRealisasi} />
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex-1 h-1.5 bg-red-200 dark:bg-red-800 rounded-full overflow-hidden mr-2">
+                    <div
+                      className="h-full bg-red-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(persentaseBelanja, 100)}%` }}
+                    />
+                  </div>
+                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(persentaseBelanja)}`}>
+                    {formatPersentase(persentaseBelanja)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Pembiayaan */}
+            <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-3 border border-amber-200 dark:border-amber-800 print:bg-gray-50 print:border-gray-200">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Banknote className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <p className="text-[10px] lg:text-xs text-amber-600 dark:text-amber-400 print:text-gray-500 font-semibold uppercase tracking-wide">
+                  Total Pembiayaan
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Anggaran</span>
+                  <p className="text-xs lg:text-sm font-bold text-amber-800 dark:text-amber-200 print:text-black">
+                    <RupiahCell value={totalPembiayaanAnggaran} />
+                  </p>
+                </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[9px] text-muted-foreground uppercase">Realisasi</span>
+                  <p className="text-xs lg:text-sm font-bold text-amber-700 dark:text-amber-300">
+                    <RupiahCell value={totalPembiayaanRealisasi} />
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex-1 h-1.5 bg-amber-200 dark:bg-amber-800 rounded-full overflow-hidden mr-2">
+                    <div
+                      className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(persentasePembiayaan, 100)}%` }}
+                    />
+                  </div>
+                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(persentasePembiayaan)}`}>
+                    {formatPersentase(persentasePembiayaan)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -572,56 +711,171 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
             );
           })}
 
-          {/* Grand Total */}
+          {/* Grand Total — Breakdown per Kategori sesuai Permendagri 90/2019 */}
           <div
-            className="mt-4 px-4 py-4 rounded-lg border-2 font-bold print:rounded-none"
+            className="mt-4 rounded-lg border-2 overflow-hidden print:rounded-none"
             style={{
               borderColor: pengaturan.warnaPrimary,
               backgroundColor: `${pengaturan.warnaPrimary}08`,
             }}
           >
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <span
-                className="text-sm lg:text-base uppercase tracking-wide"
+            {/* Header */}
+            <div
+              className="px-4 py-3 border-b"
+              style={{
+                backgroundColor: `${pengaturan.warnaPrimary}15`,
+                borderColor: `${pengaturan.warnaPrimary}30`,
+              }}
+            >
+              <h3
+                className="text-sm lg:text-base font-bold uppercase tracking-wide"
                 style={{ color: pengaturan.warnaPrimary }}
               >
-                TOTAL REALISASI PER-SKPD
+                Total Realisasi APBD per Kategori
+              </h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Sesuai Permendagri 90/2019 — Pendapatan Daerah, Belanja Daerah & Pembiayaan
+              </p>
+            </div>
+
+            {/* Breakdown Table */}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-b-2" style={{ borderColor: `${pengaturan.warnaPrimary}30` }}>
+                    <TableHead className="text-[11px] font-bold uppercase tracking-wide pl-4">
+                      Kategori
+                    </TableHead>
+                    <TableHead className="text-[11px] font-bold text-right">Anggaran (Rp)</TableHead>
+                    <TableHead className="text-[11px] font-bold text-right">Realisasi (Rp)</TableHead>
+                    <TableHead className="text-[11px] font-bold text-right">Selisih (Rp)</TableHead>
+                    <TableHead className="text-[11px] font-bold text-center pr-4">Persentase</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {/* Row 1: Pendapatan (PAD) */}
+                  <TableRow className="hover:bg-teal-50/50 dark:hover:bg-teal-950/10">
+                    <TableCell className="text-xs font-semibold pl-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-teal-500" />
+                        Pendapatan (PAD)
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-medium">
+                      <RupiahCell value={totalPADAnggaran} />
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-bold text-teal-700 dark:text-teal-300">
+                      <RupiahCell value={totalPADRealisasi} className="text-teal-700 dark:text-teal-300" />
+                    </TableCell>
+                    <TableCell className={`text-xs text-right font-semibold ${totalPADAnggaran - totalPADRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      <RupiahCell value={Math.abs(totalPADAnggaran - totalPADRealisasi)} prefix={totalPADAnggaran - totalPADRealisasi < 0 ? "+" : ""} className={totalPADAnggaran - totalPADRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
+                    </TableCell>
+                    <TableCell className="text-center pr-4">
+                      <Badge className={`text-[10px] px-2 py-0.5 h-5 border ${getRealisasiBadgeClass(persentasePAD)}`}>
+                        {formatPersentase(persentasePAD)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Row 2: Total Pendapatan */}
+                  <TableRow className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/10">
+                    <TableCell className="text-xs font-semibold pl-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        Total Pendapatan Daerah
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-medium">
+                      <RupiahCell value={totalPendapatanAnggaran} />
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-bold text-emerald-700 dark:text-emerald-300">
+                      <RupiahCell value={totalPendapatanRealisasi} className="text-emerald-700 dark:text-emerald-300" />
+                    </TableCell>
+                    <TableCell className={`text-xs text-right font-semibold ${totalPendapatanAnggaran - totalPendapatanRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      <RupiahCell value={Math.abs(totalPendapatanAnggaran - totalPendapatanRealisasi)} prefix={totalPendapatanAnggaran - totalPendapatanRealisasi < 0 ? "+" : ""} className={totalPendapatanAnggaran - totalPendapatanRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
+                    </TableCell>
+                    <TableCell className="text-center pr-4">
+                      <Badge className={`text-[10px] px-2 py-0.5 h-5 border ${getRealisasiBadgeClass(persentasePendapatan)}`}>
+                        {formatPersentase(persentasePendapatan)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Row 3: Total Belanja */}
+                  <TableRow className="hover:bg-red-50/50 dark:hover:bg-red-950/10">
+                    <TableCell className="text-xs font-semibold pl-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                        Total Belanja Daerah
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-medium">
+                      <RupiahCell value={totalBelanjaAnggaran} />
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-bold text-red-700 dark:text-red-300">
+                      <RupiahCell value={totalBelanjaRealisasi} className="text-red-700 dark:text-red-300" />
+                    </TableCell>
+                    <TableCell className={`text-xs text-right font-semibold ${totalBelanjaAnggaran - totalBelanjaRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      <RupiahCell value={Math.abs(totalBelanjaAnggaran - totalBelanjaRealisasi)} prefix={totalBelanjaAnggaran - totalBelanjaRealisasi < 0 ? "+" : ""} className={totalBelanjaAnggaran - totalBelanjaRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
+                    </TableCell>
+                    <TableCell className="text-center pr-4">
+                      <Badge className={`text-[10px] px-2 py-0.5 h-5 border ${getRealisasiBadgeClass(persentaseBelanja)}`}>
+                        {formatPersentase(persentaseBelanja)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+
+                  {/* Row 4: Total Pembiayaan */}
+                  <TableRow className="hover:bg-amber-50/50 dark:hover:bg-amber-950/10">
+                    <TableCell className="text-xs font-semibold pl-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-amber-500" />
+                        Total Pembiayaan
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-medium">
+                      <RupiahCell value={totalPembiayaanAnggaran} />
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-bold text-amber-700 dark:text-amber-300">
+                      <RupiahCell value={totalPembiayaanRealisasi} className="text-amber-700 dark:text-amber-300" />
+                    </TableCell>
+                    <TableCell className={`text-xs text-right font-semibold ${totalPembiayaanAnggaran - totalPembiayaanRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      <RupiahCell value={Math.abs(totalPembiayaanAnggaran - totalPembiayaanRealisasi)} prefix={totalPembiayaanAnggaran - totalPembiayaanRealisasi < 0 ? "+" : ""} className={totalPembiayaanAnggaran - totalPembiayaanRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
+                    </TableCell>
+                    <TableCell className="text-center pr-4">
+                      <Badge className={`text-[10px] px-2 py-0.5 h-5 border ${getRealisasiBadgeClass(persentasePembiayaan)}`}>
+                        {formatPersentase(persentasePembiayaan)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Footer Summary */}
+            <div
+              className="px-4 py-3 border-t flex items-center justify-between flex-wrap gap-2"
+              style={{ borderColor: `${pengaturan.warnaPrimary}30` }}
+            >
+              <span
+                className="text-[11px] uppercase tracking-wide font-semibold"
+                style={{ color: pengaturan.warnaPrimary }}
+              >
+                Jumlah OPD Tercatat: {filteredItems.length}
               </span>
-              <div className="flex items-center gap-3 lg:gap-6 flex-wrap">
-                <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground uppercase">Anggaran</p>
-                  <p className="text-sm font-bold">
-                    <RupiahCell value={totalAnggaran} />
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground uppercase">Realisasi</p>
-                  <p className="text-sm font-bold text-blue-700">
-                    <RupiahCell value={totalRealisasi} className="text-blue-700" />
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-muted-foreground uppercase">Selisih</p>
-                  <p
-                    className={`text-sm font-bold ${
-                      totalAnggaran - totalRealisasi < 0
-                        ? "text-red-600"
-                        : "text-emerald-600"
-                    }`}
-                  >
-                    <RupiahCell value={Math.abs(totalAnggaran - totalRealisasi)} prefix={totalAnggaran - totalRealisasi < 0 ? "+" : ""} className={totalAnggaran - totalRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
-                  </p>
-                </div>
-                <Badge
-                  className="text-sm px-3 py-1 h-7 border font-bold"
-                  style={{
-                    backgroundColor: `${pengaturan.warnaPrimary}15`,
-                    color: pengaturan.warnaPrimary,
-                    borderColor: pengaturan.warnaPrimary,
-                  }}
-                >
-                  {formatPersentase(totalPersentase)}
-                </Badge>
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-teal-500" /> PAD
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" /> Pendapatan
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-red-500" /> Belanja
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" /> Pembiayaan
+                </span>
               </div>
             </div>
           </div>
@@ -1146,51 +1400,105 @@ export default function RealisasiSkpdView({ data }: RealisasiSkpdViewProps) {
                 })()}
               </div>
 
-              {/* Grand Total Footer */}
+              {/* Grand Total Footer — Breakdown sesuai Permendagri 90/2019 */}
               {detailData && (
                 <div
-                  className="px-8 py-4 border-t-2 font-bold"
+                  className="px-8 py-4 border-t-2"
                   style={{
                     borderColor: pengaturan.warnaPrimary,
                     backgroundColor: `${pengaturan.warnaPrimary}08`,
                   }}
                 >
-                  <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center justify-between mb-3">
                     <span
-                      className="text-sm uppercase tracking-wide"
+                      className="text-sm uppercase tracking-wide font-bold"
                       style={{ color: pengaturan.warnaPrimary }}
                     >
                       Total Keseluruhan OPD
                     </span>
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase">Anggaran</p>
-                        <p className="text-sm font-bold">
-                          <RupiahCell value={detailData.ringkasan.totalAnggaran} />
-                        </p>
+                    <Badge
+                      className="text-xs px-2 py-0.5 h-6 border font-bold"
+                      style={{
+                        backgroundColor: `${pengaturan.warnaPrimary}15`,
+                        color: pengaturan.warnaPrimary,
+                        borderColor: pengaturan.warnaPrimary,
+                      }}
+                    >
+                      {detailData.ringkasan.pendapatan.jumlah +
+                        detailData.ringkasan.belanja.jumlah +
+                        detailData.ringkasan.pembiayaan.jumlah}{" "}
+                      akun
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Pendapatan */}
+                    <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-3">
+                      <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide mb-1">
+                        Pendapatan
+                      </p>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Anggaran</span>
+                        <span className="font-bold">
+                          <RupiahCell value={detailData.ringkasan.pendapatan.anggaran} />
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase">Realisasi</p>
-                        <p className="text-sm font-bold text-blue-700">
-                          <RupiahCell value={detailData.ringkasan.totalRealisasi} className="text-blue-700" />
-                        </p>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Realisasi</span>
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                          <RupiahCell value={detailData.ringkasan.pendapatan.realisasi} className="text-emerald-700 dark:text-emerald-300" />
+                        </span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase">Selisih</p>
-                        <p className={`text-sm font-bold ${detailData.ringkasan.totalAnggaran - detailData.ringkasan.totalRealisasi < 0 ? "text-red-600" : "text-emerald-600"}`}>
-                          <RupiahCell value={Math.abs(detailData.ringkasan.totalAnggaran - detailData.ringkasan.totalRealisasi)} prefix={detailData.ringkasan.totalAnggaran - detailData.ringkasan.totalRealisasi < 0 ? "+" : ""} className={detailData.ringkasan.totalAnggaran - detailData.ringkasan.totalRealisasi < 0 ? "text-red-600" : "text-emerald-600"} />
-                        </p>
+                      <div className="flex justify-end mt-1">
+                        <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(detailData.ringkasan.pendapatan.persentase)}`}>
+                          {formatPersentase(detailData.ringkasan.pendapatan.persentase)}
+                        </Badge>
                       </div>
-                      <Badge
-                        className="text-sm px-3 py-1 h-7 border font-bold"
-                        style={{
-                          backgroundColor: `${pengaturan.warnaPrimary}15`,
-                          color: pengaturan.warnaPrimary,
-                          borderColor: pengaturan.warnaPrimary,
-                        }}
-                      >
-                        {formatPersentase(safePercentage(detailData.ringkasan.totalRealisasi, detailData.ringkasan.totalAnggaran))}
-                      </Badge>
+                    </div>
+                    {/* Belanja */}
+                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20 p-3">
+                      <p className="text-[10px] font-bold text-red-700 dark:text-red-300 uppercase tracking-wide mb-1">
+                        Belanja
+                      </p>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Anggaran</span>
+                        <span className="font-bold">
+                          <RupiahCell value={detailData.ringkasan.belanja.anggaran} />
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Realisasi</span>
+                        <span className="font-bold text-red-700 dark:text-red-300">
+                          <RupiahCell value={detailData.ringkasan.belanja.realisasi} className="text-red-700 dark:text-red-300" />
+                        </span>
+                      </div>
+                      <div className="flex justify-end mt-1">
+                        <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(detailData.ringkasan.belanja.persentase)}`}>
+                          {formatPersentase(detailData.ringkasan.belanja.persentase)}
+                        </Badge>
+                      </div>
+                    </div>
+                    {/* Pembiayaan */}
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3">
+                      <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide mb-1">
+                        Pembiayaan
+                      </p>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Anggaran</span>
+                        <span className="font-bold">
+                          <RupiahCell value={detailData.ringkasan.pembiayaan.anggaran} />
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Realisasi</span>
+                        <span className="font-bold text-amber-700 dark:text-amber-300">
+                          <RupiahCell value={detailData.ringkasan.pembiayaan.realisasi} className="text-amber-700 dark:text-amber-300" />
+                        </span>
+                      </div>
+                      <div className="flex justify-end mt-1">
+                        <Badge className={`text-[10px] px-1.5 py-0 h-5 border ${getRealisasiBadgeClass(detailData.ringkasan.pembiayaan.persentase)}`}>
+                          {formatPersentase(detailData.ringkasan.pembiayaan.persentase)}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </div>
